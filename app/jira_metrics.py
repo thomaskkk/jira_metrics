@@ -20,12 +20,13 @@ def jql_search(jira_obj):
 
 
 def convert_cfd_table(issues_obj):
-    """Convert the issues obj into a dictionary on the cfd format""" 
+    """Convert the issues obj into a dictionary on the cfd format"""
     cfd_table = {}
     for issue in issues_obj:
-        return issue.changelog
-        break
-
+        for history in issue.changelog.histories:
+            for item in history.items:
+                if item.field == 'status':
+                    print("Issue: {} on {} moved from [{}] to [{}]".format(issue.key, history.created, item.fromString, item.toString))
 
 
 def config_reader(yaml_file):
@@ -40,4 +41,4 @@ if __name__ == "__main__":
     jira = atlassian_auth(config)
     jira = jql_search(jira)
     dictio = convert_cfd_table(jira)
-    print(dictio.__dict__)
+    # print(dictio.__dict__)
