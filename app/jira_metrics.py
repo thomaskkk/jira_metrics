@@ -2,6 +2,7 @@
 
 from jira import JIRA
 import yaml
+import datetime as dt
 
 
 def config_reader(yaml_file):
@@ -37,8 +38,7 @@ def convert_cfd_table(issues_obj, cfg):
         # create other columns according to workflow in cfg 
         for line_item in cfg['Workflow']:
             cfd_line[line_item] = 0
-        
-        
+
         # create a mini dict to organize itens (issue_time, history_time, from_status, to_status)
         status_table = []
         for history in issue.changelog.histories:
@@ -76,7 +76,10 @@ def process_status_table(status_table, cfd_line):
 
 def calc_diff_date_to_unix(start_datetime, end_datetime):
     """Given the start and end datetime return the difference in unix timestamp format"""
-    return 1
+    start = dt.datetime.strptime(start_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
+    end = dt.datetime.strptime(end_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
+    timedelta = end - start
+    return timedelta.total_seconds()
 
 
 if __name__ == "__main__":
