@@ -3,6 +3,7 @@
 from jira import JIRA
 import yaml
 import datetime as dt
+import numpy as np
 
 
 def config_reader(yaml_file):
@@ -87,6 +88,19 @@ def calc_diff_date_to_unix(start_datetime, end_datetime):
     return timedelta.total_seconds()
 
 
+def calc_cycletime_percentile(dictio, cfg):
+    cycletime = []
+    for entry in dictio:
+        cycletime.append(entry['cycletime'])
+
+    if len(cycletime) >= 1:
+        for percentile in cfg['Percentiles']:
+            formated = ((np.percentile(cycletime, percentile)/60)/60)/24
+            print("Cycletime Percentile of {}% is {}".format(percentile, formated))
+    else:
+        print("No items form query")
+
+
 if __name__ == "__main__":
     yaml_file = "../config_test.yml"
     config = config_reader(yaml_file)
@@ -94,3 +108,4 @@ if __name__ == "__main__":
     jira = jql_search(jira)
     dictio = convert_cfd_table(jira, config)
     print(dictio)
+    calc_cycletime_percentile(dictio, config)
