@@ -2,7 +2,7 @@
 
 from jira import JIRA
 import yaml
-import datetime as dt
+from datetime import datetime as dt
 import numpy as np
 
 
@@ -27,7 +27,7 @@ def jql_search(jira_obj):
     return issues
 
 
-def convert_cfd_table(issues_obj, cfg):
+def convert_cfd_table(issues_obj, jira_obj, cfg):
     """Convert the issues obj into a dictionary on the cfd format"""
     cfd_table = []
     for issue in issues_obj:
@@ -39,7 +39,7 @@ def convert_cfd_table(issues_obj, cfg):
 
         # create other columns according to workflow in cfg
         for line_item in cfg['Workflow']:
-            cfd_line[line_item] = 0
+            cfd_line[line_item.lower()] = 0
 
         # create a mini dict to organize itens (issue_time, history_time, from_status, to_status)
         status_table = []
@@ -49,8 +49,8 @@ def convert_cfd_table(issues_obj, cfg):
                 if item.field == 'status':
                     status_line = {}
                     status_line["history_datetime"] = history.created
-                    status_line["from_status"] = item.fromString
-                    status_line["to_status"] = item.toString
+                    status_line["from_status"] = item.fromString.lower()
+                    status_line["to_status"] = item.toString.lower()
                     status_table.append(status_line)
 
         # send the mini dict to be processed and return the workflow times
@@ -73,8 +73,10 @@ def process_status_table(status_table, cfd_line, cfg):
                 # add the time to the column corresponding the enddatetime
                 cfd_line[item1['from_status']] += calc_diff_date_to_unix(item2['history_datetime'], item1['history_datetime'])
 
+                # lowercase cfg to match lowercase status keys
+                dict_lower = {k.lower(): v.lower() for k, v in cfg['Cycletime'].items()}
                 # add to cycletime if field set on config
-                if item1['from_status'] in cfg['Cycletime']:
+                if item1['from_status'] in dict_lower:
                     cfd_line["cycletime"] += cfd_line[item1['from_status']]
 
     return cfd_line
@@ -82,30 +84,42 @@ def process_status_table(status_table, cfd_line, cfg):
 
 def calc_diff_date_to_unix(start_datetime, end_datetime):
     """Given the start and end datetime return the difference in unix timestamp format"""
-    start = dt.datetime.strptime(start_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
-    end = dt.datetime.strptime(end_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
+    start = dt.strptime(start_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
+    end = dt.strptime(end_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
     timedelta = end - start
     return timedelta.total_seconds()
 
 
 def calc_cycletime_percentile(dictio, cfg):
+    # auxiliary dict with the colums that should be added to cycletime calc
     cycletime = []
     for entry in dictio:
         cycletime.append(entry['cycletime'])
 
-    if len(cycletime) >= 1:
+    if len(dictio) >= 1 and len(cycletime) >= 1:
+        print("Your throughput is of {} items".format(len(dictio)))
         for percentile in cfg['Percentiles']:
-            formated = ((np.percentile(cycletime, percentile)/60)/60)/24
-            print("Cycletime Percentile of {}% is {}".format(percentile, formated))
+            # formated = ((np.percentile(cycletime, percentile)/60)/60)/24
+            sec = np.percentile(cycletime, percentile)
+            seconds_in_day = 60 * 60 * 24
+            seconds_in_hour = 60 * 60
+            seconds_in_minute = 60
+
+            days = sec // seconds_in_day
+            hours = (sec - (days * seconds_in_day)) // seconds_in_hour
+            minutes = (sec - (days * seconds_in_day) - (hours * seconds_in_hour)) // seconds_in_minute
+            
+            print("Cycletime Percentile of {}% is {} days {} hours {} minutes".format(percentile, days, hours, minutes))
     else:
-        print("No items form query")
+        print("No items from query or to calculate percentiles")
+    
 
 
 if __name__ == "__main__":
-    yaml_file = "../config_test.yml"
+    yaml_file = "config_test.yml"
     config = config_reader(yaml_file)
     jira = atlassian_auth(config)
-    jira = jql_search(jira)
-    dictio = convert_cfd_table(jira, config)
+    issue = jql_search(jira)
+    dictio = convert_cfd_table(issue, jira, config)
     print(dictio)
     calc_cycletime_percentile(dictio, config)
