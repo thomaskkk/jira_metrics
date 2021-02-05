@@ -34,8 +34,9 @@ def convert_cfd_table(issues_obj, cfg):
         cfd_line = {}
         cfd_line["issue"] = issue.key
         cfd_line["issuetype"] = issue.fields.issuetype.name
+        cfd_line["cycletime"] = 0
 
-        # create other columns according to workflow in cfg 
+        # create other columns according to workflow in cfg
         for line_item in cfg['Workflow']:
             cfd_line[line_item] = 0
 
@@ -52,7 +53,7 @@ def convert_cfd_table(issues_obj, cfg):
                     status_table.append(status_line)
 
         # send the mini dict to be processed and return the workflow times
-        cfd_line = process_status_table(status_table, cfd_line)
+        cfd_line = process_status_table(status_table, cfd_line, cfg)
         # adding a special case: time on the first status should be compared to when the issue was created
         # it is always the last line of the status table
         cfd_line[status_table[-1]['from_status']] = calc_diff_date_to_unix(issue.fields.created, status_table[-1]['history_datetime'])
@@ -62,7 +63,7 @@ def convert_cfd_table(issues_obj, cfg):
     return cfd_table
 
 
-def process_status_table(status_table, cfd_line):
+def process_status_table(status_table, cfd_line, cfg):
     # everytime that I have fromString(enddatetime) I should find a toString(startdatetime)
     for item1 in status_table:
         for item2 in status_table:
@@ -70,6 +71,10 @@ def process_status_table(status_table, cfd_line):
                 # send to calc
                 # add the time to the column corresponding the enddatetime
                 cfd_line[item1['from_status']] += calc_diff_date_to_unix(item2['history_datetime'], item1['history_datetime'])
+
+                # add to cycletime if field set on config
+                if item1['from_status'] in cfg['Cycletime']:
+                    cfd_line["cycletime"] += cfd_line[item1['from_status']]
 
     return cfd_line
 
