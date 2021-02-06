@@ -4,6 +4,7 @@ from jira import JIRA
 import yaml
 from datetime import datetime as dt
 import numpy as np
+import math
 
 
 def config_reader(yaml_file):
@@ -36,10 +37,13 @@ def convert_cfd_table(issues_obj, jira_obj, cfg):
         cfd_line["issue"] = issue.key
         cfd_line["issuetype"] = issue.fields.issuetype.name
         cfd_line["cycletime"] = 0
+        cfd_line["final_datetime"] = 0
 
         # create other columns according to workflow in cfg
         for line_item in cfg['Workflow']:
             cfd_line[line_item.lower()] = 0
+        # store final status
+        final_status = list(cfg['Workflow'])[-1].lower()
 
         # create a mini dict to organize itens (issue_time, history_time, from_status, to_status)
         status_table = []
@@ -52,6 +56,9 @@ def convert_cfd_table(issues_obj, jira_obj, cfg):
                     status_line["from_status"] = item.fromString.lower()
                     status_line["to_status"] = item.toString.lower()
                     status_table.append(status_line)
+                    # store in finaldatetime the highest timestamp to fix items with many 'done' transitions
+                    if item.toString.lower() == final_status and convert_jira_datetime(history.created) > cfd_line["final_datetime"]:
+                        cfd_line["final_datetime"] = convert_jira_datetime(history.created)
 
         # send the mini dict to be processed and return the workflow times
         cfd_line = process_status_table(status_table, cfd_line, cfg)
@@ -84,13 +91,20 @@ def process_status_table(status_table, cfd_line, cfg):
 
 def calc_diff_date_to_unix(start_datetime, end_datetime):
     """Given the start and end datetime return the difference in unix timestamp format"""
-    start = dt.strptime(start_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
-    end = dt.strptime(end_datetime, '%Y-%m-%dT%H:%M:%S.%f%z')
+    start = convert_jira_datetime(start_datetime)
+    end = convert_jira_datetime(end_datetime)
     timedelta = end - start
-    return timedelta.total_seconds()
+    minutes = math.ceil(timedelta/60)
+    return minutes
+
+def convert_jira_datetime(datetime_str):
+    """Convert Jira datetime format to unix timestamp"""
+    time = dt.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S.%f%z')
+    return dt.timestamp(time)
 
 
 def calc_cycletime_percentile(dictio, cfg):
+    """Calculate cycletime percentiles on cfg with all dict entries"""
     # auxiliary dict with the colums that should be added to cycletime calc
     cycletime = []
     for entry in dictio:
@@ -99,20 +113,17 @@ def calc_cycletime_percentile(dictio, cfg):
     if len(dictio) >= 1 and len(cycletime) >= 1:
         print("Your throughput is of {} items".format(len(dictio)))
         for percentile in cfg['Percentiles']:
-            # formated = ((np.percentile(cycletime, percentile)/60)/60)/24
-            sec = np.percentile(cycletime, percentile)
-            seconds_in_day = 60 * 60 * 24
-            seconds_in_hour = 60 * 60
-            seconds_in_minute = 60
+            minutes = np.percentile(cycletime, percentile)
+            minutes_in_day = 60 * 24
+            minutes_in_hour = 60
 
-            days = sec // seconds_in_day
-            hours = (sec - (days * seconds_in_day)) // seconds_in_hour
-            minutes = (sec - (days * seconds_in_day) - (hours * seconds_in_hour)) // seconds_in_minute
-            
+            days = math.ceil(minutes // minutes_in_day)
+            hours = math.ceil((minutes - (days * minutes_in_day)) // minutes_in_hour)
+            minutes = math.ceil((minutes - (days * minutes_in_day) - (hours * minutes_in_hour)))
+
             print("Cycletime Percentile of {}% is {} days {} hours {} minutes".format(percentile, days, hours, minutes))
     else:
         print("No items from query or to calculate percentiles")
-    
 
 
 if __name__ == "__main__":
@@ -121,5 +132,5 @@ if __name__ == "__main__":
     jira = atlassian_auth(config)
     issue = jql_search(jira)
     dictio = convert_cfd_table(issue, jira, config)
-    print(dictio)
+    # print(dictio)
     calc_cycletime_percentile(dictio, config)
