@@ -166,6 +166,7 @@ if __name__ == "__main__":
     jira = atlassian_auth(config)
     issue = jql_search(jira)
     dictio = convert_cfd_table(issue, jira, config)
+    calc_cycletime_percentile(dictio, config)
     kanban_data = read_dates(dictio)
     tp = calc_throughput(kanban_data)
     dist = simulate_montecarlo(tp)
