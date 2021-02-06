@@ -98,6 +98,7 @@ def calc_diff_date_to_unix(start_datetime, end_datetime):
     minutes = math.ceil(timedelta/60)
     return minutes
 
+
 def convert_jira_datetime(datetime_str):
     """Convert Jira datetime format to unix timestamp"""
     time = dt.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S.%f%z')
@@ -126,9 +127,10 @@ def calc_cycletime_percentile(dictio, cfg):
     else:
         print("No items from query or to calculate percentiles")
 
+
 def read_dates(dictio):
     kanban_data = pd.DataFrame.from_dict(dictio)
-    kanban_data.final_datetime = pd.to_datetime(kanban_data.final_datetime,unit='s').dt.date
+    kanban_data.final_datetime = pd.to_datetime(kanban_data.final_datetime, unit='s').dt.date
     return kanban_data
 
 
@@ -142,22 +144,19 @@ def calc_throughput(kanban_data):
     pd.set_option("display.max_rows", None, "display.max_columns", None)
     return throughput
 
-def simulate_montecarlo(throughput):
-    #Run Monte Carlo Simulation 'How Many
-    ### SETTINGS ####
-    LAST_DAYS = 90
-    SIMULATION_DAYS = 30
-    SIMULATIONS = 10000
-    ###
 
-    dataset = throughput[['Throughput']].tail(LAST_DAYS).reset_index(drop=True)
-    samples = [dataset.sample(n=SIMULATION_DAYS, replace=True).sum().Throughput for i in range(SIMULATIONS)]
+def simulate_montecarlo(throughput, cfg):
+    # Run Monte Carlo Simulation 'How Many
+    ### SETTINGS ####
+    SIMULATION_DAYS = 30
+
+    dataset = throughput[['Throughput']].reset_index(drop=True)
+    samples = [dataset.sample(n=SIMULATION_DAYS, replace=True).sum().Throughput for i in range(cfg['Montecarlo']['Simulations'])]
     samples = pd.DataFrame(samples, columns=['Items'])
     distribution = samples.groupby(['Items']).size().reset_index(name='Frequency')
     distribution = distribution.sort_index(ascending=False)
     distribution['Probability'] = 100 * distribution.Frequency.cumsum() / distribution.Frequency.sum()
     return distribution
-
 
 
 if __name__ == "__main__":
@@ -169,5 +168,5 @@ if __name__ == "__main__":
     calc_cycletime_percentile(dictio, config)
     kanban_data = read_dates(dictio)
     tp = calc_throughput(kanban_data)
-    dist = simulate_montecarlo(tp)
+    dist = simulate_montecarlo(tp, config)
     print(dist)
