@@ -5,6 +5,7 @@ import yaml
 from datetime import datetime as dt
 import numpy as np
 import math
+import pandas as pd
 
 
 def config_reader(yaml_file):
@@ -125,6 +126,39 @@ def calc_cycletime_percentile(dictio, cfg):
     else:
         print("No items from query or to calculate percentiles")
 
+def read_dates(dictio):
+    kanban_data = pd.DataFrame.from_dict(dictio)
+    kanban_data.final_datetime = pd.to_datetime(kanban_data.final_datetime,unit='s').dt.date
+    return kanban_data
+
+
+def calc_throughput(kanban_data):
+    # Calculate Throughput
+    throughput = pd.crosstab(kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]).reset_index()
+    throughput['Throughput'] = throughput.Bug + throughput.Story
+    date_range = pd.date_range(start=throughput.final_datetime.min(), end=throughput.final_datetime.max())
+    throughput = throughput.set_index('final_datetime').reindex(date_range).fillna(0).astype(int).rename_axis('Date')
+    # throughput_per_week = pd.DataFrame(throughput['Throughput'].resample('W-Mon').sum()).reset_index()
+    pd.set_option("display.max_rows", None, "display.max_columns", None)
+    return throughput
+
+def simulate_montecarlo(throughput):
+    #Run Monte Carlo Simulation 'How Many
+    ### SETTINGS ####
+    LAST_DAYS = 90
+    SIMULATION_DAYS = 30
+    SIMULATIONS = 10000
+    ###
+
+    dataset = throughput[['Throughput']].tail(LAST_DAYS).reset_index(drop=True)
+    samples = [dataset.sample(n=SIMULATION_DAYS, replace=True).sum().Throughput for i in range(SIMULATIONS)]
+    samples = pd.DataFrame(samples, columns=['Items'])
+    distribution = samples.groupby(['Items']).size().reset_index(name='Frequency')
+    distribution = distribution.sort_index(ascending=False)
+    distribution['Probability'] = 100 * distribution.Frequency.cumsum() / distribution.Frequency.sum()
+    return distribution
+
+
 
 if __name__ == "__main__":
     yaml_file = "config_test.yml"
@@ -132,5 +166,7 @@ if __name__ == "__main__":
     jira = atlassian_auth(config)
     issue = jql_search(jira)
     dictio = convert_cfd_table(issue, jira, config)
-    # print(dictio)
-    calc_cycletime_percentile(dictio, config)
+    kanban_data = read_dates(dictio)
+    tp = calc_throughput(kanban_data)
+    dist = simulate_montecarlo(tp)
+    print(dist)
