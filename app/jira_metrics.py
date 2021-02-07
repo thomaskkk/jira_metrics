@@ -187,9 +187,15 @@ def calc_throughput(kanban_data):
     throughput = pd.crosstab(
         kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]
     ).reset_index()
-    # TODO: fix types
-    throughput['Throughput'] = throughput.Bug + throughput.Story + throughput\
-        .Task
+    # Sum Throughput per day
+    throughput['Throughput'] = 0
+    if 'Story' in throughput:
+        throughput['Throughput'] += throughput.Story
+    if 'Bug' in throughput:
+        throughput['Throughput'] += throughput.Bug
+    if 'Task' in throughput:
+        throughput['Throughput'] += throughput.Task
+
     date_range = pd.date_range(
         start=throughput.final_datetime.min(),
         end=throughput.final_datetime.max()
