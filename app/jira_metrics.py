@@ -1,54 +1,54 @@
 #!/usr/bin/env python
 
+import confuse
 from jira import JIRA
-import yaml
 from datetime import datetime as dt
 import numpy as np
 import math
 import pandas as pd
 
-
-def config_reader(yaml_file):
-    """Open the yaml file with all config and return as a dictionary"""
-    with open(yaml_file) as file:
-        return yaml.load(file, Loader=yaml.FullLoader)
+cfg = confuse.Configuration('JiraMetrics', __name__)
+cfg.set_file('config_test.yml')
 
 
-def atlassian_auth(cfg):
+def atlassian_auth():
     """Authenticate on the Jira Cloud instance"""
+    username = cfg['Connection']['Username'].get()
+    api = cfg['Connection']['ApiKey'].get()
+
     jira = JIRA(
-        server=cfg['Connection']['Domain'],
-        basic_auth=(cfg['Connection']['Username'], cfg['Connection']['ApiKey'])
-        )
+        server=cfg['Connection']['Domain'].get(),
+        basic_auth=(username, api)
+    )
     return jira
 
 
 def jql_search(jira_obj):
     """Run a JQL search and return the jira object with results"""
     issues = jira.search_issues(
-        config['Query'], maxResults=9999, expand='changelog'
+        cfg['Query'].get(), maxResults=99999, expand='changelog'
     )
     return issues
 
 
-def convert_cfd_table(issues_obj, jira_obj, cfg):
+def convert_cfd_table(issues_obj, jira_obj):
     """Convert the issues obj into a dictionary on the cfd format"""
     cfd_table = []
     for issue in issues_obj:
         # start creating our line of the table with field: value
         cfd_line = {}
         cfd_line["issue"] = issue.key
-        cfd_line["issuetype"] = group_issuetype(
-            issue.fields.issuetype.name, cfg
-            )
+        cfd_line["issuetype"] = group_issuetype(issue.fields.issuetype.name)
         cfd_line["cycletime"] = 0
         cfd_line["final_datetime"] = 0
 
         # create other columns according to workflow in cfg
-        for line_item in cfg['Workflow']:
-            cfd_line[line_item.lower()] = 0
+        workflows = cfg['Workflow'].get()
+        for key, value in workflows.items():
+            cfd_line[key.lower()] = 0
+
         # store final status
-        final_status = list(cfg['Workflow'])[-1].lower()
+        fstatus = list(cfd_line.keys())[-1]
 
         # create a mini dict to organize itens
         # (issue_time, history_time, from_status, to_status)
@@ -59,20 +59,18 @@ def convert_cfd_table(issues_obj, jira_obj, cfg):
                 if item.field == 'status':
                     status_line = {}
                     status_line["history_datetime"] = history.created
-                    status_line["from_status"] = group_status(
-                        item.fromString, cfg
-                    )
-                    status_line["to_status"] = group_status(item.toString, cfg)
+                    status_line["from_status"] = group_status(item.fromString)
+                    status_line["to_status"] = group_status(item.toString)
                     status_table.append(status_line)
                     # store in finaldatetime the highest timestamp to fix
                     # items with many 'done' transitions
-                    if group_status(item.toString, cfg) == final_status and convert_jira_datetime(history.created) > cfd_line["final_datetime"]:
-                        cfd_line["final_datetime"] = convert_jira_datetime(
-                            history.created
-                        )
+                    stamp_created = convert_jira_datetime(history.created)
+                    if (group_status(item.toString) == fstatus and
+                            stamp_created > cfd_line["final_datetime"]):
+                        cfd_line["final_datetime"] = stamp_created
 
         # send the mini dict to be processed and return the workflow times
-        cfd_line = process_status_table(status_table, cfd_line, cfg)
+        cfd_line = process_status_table(status_table, cfd_line)
         # special case: time on the first status should be compared to when
         # the issue was created it is always the last line of the status table
         cfd_line[status_table[-1]['from_status']] = calc_diff_date_to_unix(
@@ -85,7 +83,7 @@ def convert_cfd_table(issues_obj, jira_obj, cfg):
     return cfd_table
 
 
-def process_status_table(status_table, cfd_line, cfg):
+def process_status_table(status_table, cfd_line):
     # everytime that I have fromString(enddatetime)
     # I should find a toString(startdatetime)
     for item1 in status_table:
@@ -97,7 +95,7 @@ def process_status_table(status_table, cfd_line, cfg):
                     item2['history_datetime'], item1['history_datetime'])
 
                 # lowercase cfg to match lowercase status keys
-                list_lower = {v.lower() for v in cfg['Cycletime']}
+                list_lower = {v.lower() for v in cfg['Cycletime'].get()}
                 # add to cycletime if field set on config
                 if item1['from_status'] in list_lower:
                     cfd_line["cycletime"] += cfd_line[item1['from_status']]
@@ -105,10 +103,11 @@ def process_status_table(status_table, cfd_line, cfg):
     return cfd_line
 
 
-def group_issuetype(issuetype, cfg):
-    for key1, value1 in cfg['Issuetype'].items():
+def group_issuetype(issuetype):
+    types = cfg['Issuetype'].get()
+    for key1, value1 in types.items():
         if type(value1) == list:
-            for value2 in cfg['Issuetype'][key1]:
+            for value2 in types[key1]:
                 if value2 == issuetype:
                     return key1
         else:
@@ -116,10 +115,11 @@ def group_issuetype(issuetype, cfg):
                 return key1
 
 
-def group_status(status, cfg):
-    for key1, value1 in cfg['Workflow'].items():
+def group_status(status):
+    workflows = cfg['Workflow'].get()
+    for key1, value1 in workflows.items():
         if type(value1) == list:
-            for value2 in cfg['Workflow'][key1]:
+            for value2 in workflows[key1]:
                 if value2.lower() == status.lower():
                     return key1.lower()
         else:
@@ -143,7 +143,7 @@ def convert_jira_datetime(datetime_str):
     return dt.timestamp(time)
 
 
-def calc_cycletime_percentile(dictio, cfg):
+def calc_cycletime_percentile(dictio):
     """Calculate cycletime percentiles on cfg with all dict entries"""
     # auxiliary dict with the colums that should be added to cycletime calc
     cycletime = []
@@ -152,7 +152,7 @@ def calc_cycletime_percentile(dictio, cfg):
 
     if len(dictio) >= 1 and len(cycletime) >= 1:
         print("Your throughput is of {} items".format(len(dictio)))
-        for percentile in cfg['Percentiles']:
+        for percentile in cfg['Percentiles'].get():
             minutes = np.percentile(cycletime, percentile)
             minutes_in_day = 60 * 24
             minutes_in_hour = 60
@@ -203,14 +203,17 @@ def calc_throughput(kanban_data):
     return throughput
 
 
-def simulate_montecarlo(throughput, cfg):
+def simulate_montecarlo(throughput):
     """Run monte carlo simulation with the result of how many itens will
-     be delivered in a set of days"""
+     be delivered in a set of days """
+
+    simul_days = cfg['Montecarlo']['Simulation Days'].get()
+    simul = cfg['Montecarlo']['Simulations'].get()
 
     dataset = throughput[['Throughput']].reset_index(drop=True)
     samples = [dataset.sample(
-        n=cfg['Montecarlo']['Simulation Days'], replace=True
-    ).sum().Throughput for i in range(cfg['Montecarlo']['Simulations'])]
+        n=simul_days, replace=True
+    ).sum().Throughput for i in range(simul)]
     samples = pd.DataFrame(samples, columns=['Items'])
     distribution = samples.groupby(['Items']).size().reset_index(
         name='Frequency'
@@ -221,7 +224,7 @@ def simulate_montecarlo(throughput, cfg):
         ) / distribution.Frequency.sum()
 
     # Get nearest result
-    for percentil in cfg['Percentiles']:
+    for percentil in cfg['Percentiles'].get():
         result_index = distribution['Probability'].sub(percentil).abs()\
             .idxmin()
         print(
@@ -237,13 +240,11 @@ def simulate_montecarlo(throughput, cfg):
 
 
 if __name__ == "__main__":
-    yaml_file = "config_test.yml"
-    config = config_reader(yaml_file)
-    jira = atlassian_auth(config)
+    jira = atlassian_auth()
     issue = jql_search(jira)
-    dictio = convert_cfd_table(issue, jira, config)
-    calc_cycletime_percentile(dictio, config)
+    dictio = convert_cfd_table(issue, jira)
+    calc_cycletime_percentile(dictio)
     kanban_data = read_dates(dictio)
     tp = calc_throughput(kanban_data)
-    dist = simulate_montecarlo(tp, config)
+    dist = simulate_montecarlo(tp)
     # print(dictio)
