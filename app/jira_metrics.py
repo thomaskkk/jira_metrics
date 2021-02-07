@@ -207,8 +207,8 @@ def simulate_montecarlo(throughput):
     """Run monte carlo simulation with the result of how many itens will
      be delivered in a set of days """
 
-    simul_days = cfg['Montecarlo']['Simulation Days'].get()
     simul = cfg['Montecarlo']['Simulations'].get()
+    simul_days = calc_simul_days()
 
     dataset = throughput[['Throughput']].reset_index(drop=True)
     samples = [dataset.sample(
@@ -239,6 +239,12 @@ def simulate_montecarlo(throughput):
     return distribution
 
 
+def calc_simul_days():
+    start = cfg['Montecarlo']['Simulation Start Date'].get()
+    end = cfg['Montecarlo']['Simulation End Date'].get()
+    return (end - start).days
+
+
 if __name__ == "__main__":
     jira = atlassian_auth()
     issue = jql_search(jira)
@@ -247,4 +253,4 @@ if __name__ == "__main__":
     kanban_data = read_dates(dictio)
     tp = calc_throughput(kanban_data)
     dist = simulate_montecarlo(tp)
-    # print(dictio)
+    print(dist)
