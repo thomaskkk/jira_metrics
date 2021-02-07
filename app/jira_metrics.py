@@ -25,13 +25,20 @@ def atlassian_auth():
 
 def jql_search(jira_obj):
     """Run a JQL search and return the jira object with results"""
+    sfields = [
+        "created",
+        "issuetype"
+    ]
     issues = jira.search_issues(
-        cfg['Query'].get(), maxResults=99999, expand='changelog'
+        cfg['Query'].get(),
+        fields=sfields,
+        maxResults=99999,
+        expand='changelog'
     )
     return issues
 
 
-def convert_cfd_table(issues_obj, jira_obj):
+def convert_cfd_table(issues_obj):
     """Convert the issues obj into a dictionary on the cfd format"""
     cfd_table = []
     for issue in issues_obj:
@@ -254,9 +261,10 @@ def calc_simul_days():
 if __name__ == "__main__":
     jira = atlassian_auth()
     issue = jql_search(jira)
-    dictio = convert_cfd_table(issue, jira)
+    dictio = convert_cfd_table(issue)
     calc_cycletime_percentile(dictio)
     kanban_data = read_dates(dictio)
-    tp = calc_throughput(kanban_data)
-    dist = simulate_montecarlo(tp)
-    print(dist)
+    print(kanban_data.dtypes)
+    # tp = calc_throughput(kanban_data)
+    # dist = simulate_montecarlo(tp)
+    # print(dist)
