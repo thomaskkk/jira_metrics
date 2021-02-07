@@ -71,3 +71,6 @@ config_test.yml
 
 #Google API credentials
 .credentials/
+
+#vscode
+.vscode/

@@ -58,7 +58,7 @@ def fill_metrics():
             "[mc_2_50]": "",
             "[mc_3_50]": "",
             "[mc_nq_50]": "",
-            "[notes]": "* Todas as métricas desta squad usam o histórico de 3 meses"
+            "[notes]": "* Todas as métricas desta squad usam o histórico de"
         },
         slide_id
     )
@@ -85,7 +85,9 @@ def batch_text_replace(text_mapping: dict, presentation_id: str, pages=None):
                 }
             ]
         else:
-            raise Exception('The text from key {} is not a string'.format(placeholder_text))
+            raise Exception(
+                'The text from key {} is not a string'.format(placeholder_text)
+            )
     return slides.execute_batch_update(requests, presentation_id)
 
 
