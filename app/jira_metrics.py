@@ -36,7 +36,7 @@ def convert_cfd_table(issues_obj, jira_obj, cfg):
         # start creating our line of the table with field: value
         cfd_line = {}
         cfd_line["issue"] = issue.key
-        cfd_line["issuetype"] = issue.fields.issuetype.name
+        cfd_line["issuetype"] = group_issuetype(issue.fields.issuetype.name, cfg)
         cfd_line["cycletime"] = 0
         cfd_line["final_datetime"] = 0
 
@@ -54,11 +54,11 @@ def convert_cfd_table(issues_obj, jira_obj, cfg):
                 if item.field == 'status':
                     status_line = {}
                     status_line["history_datetime"] = history.created
-                    status_line["from_status"] = item.fromString.lower()
-                    status_line["to_status"] = item.toString.lower()
+                    status_line["from_status"] = group_status(item.fromString, cfg)
+                    status_line["to_status"] = group_status(item.toString, cfg)
                     status_table.append(status_line)
                     # store in finaldatetime the highest timestamp to fix items with many 'done' transitions
-                    if item.toString.lower() == final_status and convert_jira_datetime(history.created) > cfd_line["final_datetime"]:
+                    if group_status(item.toString, cfg) == final_status and convert_jira_datetime(history.created) > cfd_line["final_datetime"]:
                         cfd_line["final_datetime"] = convert_jira_datetime(history.created)
 
         # send the mini dict to be processed and return the workflow times
@@ -82,12 +82,34 @@ def process_status_table(status_table, cfd_line, cfg):
                 cfd_line[item1['from_status']] += calc_diff_date_to_unix(item2['history_datetime'], item1['history_datetime'])
 
                 # lowercase cfg to match lowercase status keys
-                dict_lower = {k.lower(): v.lower() for k, v in cfg['Cycletime'].items()}
+                list_lower = {v.lower() for v in cfg['Cycletime']}
                 # add to cycletime if field set on config
-                if item1['from_status'] in dict_lower:
+                if item1['from_status'] in list_lower:
                     cfd_line["cycletime"] += cfd_line[item1['from_status']]
 
     return cfd_line
+
+
+def group_issuetype(issuetype, cfg):
+    for key1, value1 in cfg['Issuetype'].items():
+        if type(value1) == list:
+            for value2 in cfg['Issuetype'][key1]:
+                if value2 == issuetype:
+                    return key1
+        else:
+            if value1 == issuetype:
+                return key1
+
+
+def group_status(status, cfg):
+    for key1, value1 in cfg['Workflow'].items():
+        if type(value1) == list:
+            for value2 in cfg['Workflow'][key1]:
+                if value2.lower() == status.lower():
+                    return key1.lower()
+        else:
+            if value1.lower() == status.lower():
+                return key1.lower()
 
 
 def calc_diff_date_to_unix(start_datetime, end_datetime):
@@ -137,7 +159,8 @@ def read_dates(dictio):
 def calc_throughput(kanban_data):
     # Calculate Throughput
     throughput = pd.crosstab(kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]).reset_index()
-    throughput['Throughput'] = throughput.Bug + throughput.Story
+    # TODO: fix types
+    throughput['Throughput'] = throughput.Bug + throughput.Story + throughput.Task
     date_range = pd.date_range(start=throughput.final_datetime.min(), end=throughput.final_datetime.max())
     throughput = throughput.set_index('final_datetime').reindex(date_range).fillna(0).astype(int).rename_axis('Date')
     # throughput_per_week = pd.DataFrame(throughput['Throughput'].resample('W-Mon').sum()).reset_index()
@@ -146,16 +169,20 @@ def calc_throughput(kanban_data):
 
 
 def simulate_montecarlo(throughput, cfg):
-    # Run Monte Carlo Simulation 'How Many
-    ### SETTINGS ####
-    SIMULATION_DAYS = 30
+    """Run monte carlo simulation with the result of how many itens will be delivered in a set of days"""
 
     dataset = throughput[['Throughput']].reset_index(drop=True)
-    samples = [dataset.sample(n=SIMULATION_DAYS, replace=True).sum().Throughput for i in range(cfg['Montecarlo']['Simulations'])]
+    samples = [dataset.sample(n=cfg['Montecarlo']['Simulation Days'], replace=True).sum().Throughput for i in range(cfg['Montecarlo']['Simulations'])]
     samples = pd.DataFrame(samples, columns=['Items'])
     distribution = samples.groupby(['Items']).size().reset_index(name='Frequency')
     distribution = distribution.sort_index(ascending=False)
     distribution['Probability'] = 100 * distribution.Frequency.cumsum() / distribution.Frequency.sum()
+
+    # Get nearest result
+    for percentil in cfg['Percentiles']:
+        result_index = distribution['Probability'].sub(percentil).abs().idxmin()
+        print("For {}% -> Items: {} ({}%)".format(str(percentil), distribution.loc[result_index, 'Items'], distribution.loc[result_index, 'Probability']))
+
     return distribution
 
 
@@ -169,4 +196,4 @@ if __name__ == "__main__":
     kanban_data = read_dates(dictio)
     tp = calc_throughput(kanban_data)
     dist = simulate_montecarlo(tp, config)
-    print(dist)
+    # print(dictio)

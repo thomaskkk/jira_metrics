@@ -69,5 +69,5 @@ venv.bak/
 #app sample
 config_test.yml
 
-*.pem
-*.pub
+#Google API credentials
+.credentials/

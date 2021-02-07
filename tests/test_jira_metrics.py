@@ -16,4 +16,3 @@ def test_config_reader():
 
     # Then
     assert result['Connection']['Domain'] == "http://tembici.atlassian.net/"
-
