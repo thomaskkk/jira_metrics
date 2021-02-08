@@ -218,19 +218,24 @@ def calc_throughput(kanban_data):
 
 
 def simulate_montecarlo(throughput):
-    """Run monte carlo simulation with the result of how many itens will
-     be delivered in a set of days """
-
+    
     simul = cfg['Montecarlo']['Simulations'].get()
     simul_days = calc_simul_days()
-    source = cfg['Montecarlo']['Source'].get()
+    sources = cfg['Montecarlo']['Source'].get()
+    for source in sources:
+        run_simulation(throughput, source, simul, simul_days)
 
-    dataset = throughput[['Story']].reset_index(drop=True)
 
-    samples = [dataset.sample(
-        n=simul_days, replace=True
-    ).sum().Story for i in range(simul)]
+def run_simulation(throughput, source, simul, simul_days):
+    """Run monte carlo simulation with the result of how many itens will
+     be delivered in a set of days """
     
+    dataset = throughput[[source]].reset_index(drop=True)
+
+    samples = [getattr(dataset.sample(
+        n=simul_days, replace=True
+    ).sum(), source) for i in range(simul)]
+
     samples = pd.DataFrame(samples, columns=['Items'])
 
     distribution = samples.groupby(['Items']).size().reset_index(
@@ -241,7 +246,8 @@ def simulate_montecarlo(throughput):
             100*distribution.Frequency.cumsum()
         ) / distribution.Frequency.sum()
 
-    # Get nearest result
+    print(" - For {}:".format(source))
+    # Get nearest neighbor result
     for percentil in cfg['Percentiles'].get():
         result_index = distribution['Probability'].sub(percentil).abs()\
             .idxmin()
@@ -255,6 +261,7 @@ def simulate_montecarlo(throughput):
         )
 
     return distribution
+
 
 
 def calc_simul_days():

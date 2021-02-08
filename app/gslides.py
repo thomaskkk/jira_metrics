@@ -2,66 +2,74 @@
 
 import GoogleApiSupport.slides as slides
 
-
-def fill_metrics():
-    slide_id = "1F_HyJ_FV8A-wafXVyniAlw7gQsTUcE5pa10QjrWTB5o"
-    response = batch_text_replace(
-        {
+month_start =  {
             "[s_squad_name]": "ACTIVATION",
             "[squad_name]": "Activation",
             "[quarter]": "Q1",
             "[thpqs]": "",
             "[thpqt]": "",
             "[thpqb]": "",
-            "[th1s]": "",
-            "[th1t]": "",
-            "[th1b]": "",
-            "[th2s]": "",
-            "[th2t]": "",
-            "[th2b]": "",
-            "[th3s]": "",
-            "[th3t]": "",
-            "[th3b]": "",
-            "[thcqs]": "",
-            "[thcqt]": "",
-            "[thcqb]": "",
             "[th_pq_tot]": "XX items",
-            "[th_1_tot]": "",
-            "[th_2_tot]": "",
-            "[th_3_tot]": "",
-            "[th_cq_tot]": "",
             "[ctpqs]": "XXd",
             "[ctpqt]": "",
             "[ctpqb]": "",
+            "[ct_pq_tot]": "XXd (85%)",
+            "[mc_1_95]": "XX items (US only)",
+            "[mc_1_85]": "",
+            "[mc_1_50]": "",
+            "[notes]": "* Todas as métricas desta squad usam o histórico de"
+        }
+
+month_1 =  {
+            "[th1s]": "",
+            "[th1t]": "",
+            "[th1b]": "",
+            "[th_1_tot]": "",
             "[ct1s]": "",
             "[ct1t]": "",
             "[ct1b]": "",
+            "[ct_1_tot]": "",
+            "[mc_2_95]": "",
+            "[mc_2_85]": "",
+            "[mc_2_50]": "",
+        }
+
+month_2 =  {
+            "[th2s]": "",
+            "[th2t]": "",
+            "[th2b]": "",
+            "[th_2_tot]": "",
             "[ct2s]": "",
             "[ct2t]": "",
             "[ct2b]": "",
+            "[ct_2_tot]": "",
+            "[mc_3_95]": "",
+            "[mc_3_85]": "",
+            "[mc_3_50]": "",
+        }
+
+month_3 =  {
+            "[th3s]": "",
+            "[th3t]": "",
+            "[th3b]": "",
+            "[th_3_tot]": "",
+            "[thcqs]": "",
+            "[thcqt]": "",
+            "[thcqb]": "",
+            "[th_cq_tot]": "",
             "[ct3s]": "",
             "[ct3t]": "",
             "[ct3b]": "",
-            "[ct_pq_tot]": "XXd (85%)",
-            "[ct_1_tot]": "",
-            "[ct_2_tot]": "",
             "[ct_3_tot]": "",
-            "[mc_1_95]": "XX items (US only)",
-            "[mc_2_95]": "",
-            "[mc_3_95]": "",
             "[mc_nq_95]": "",
-            "[mc_1_85]": "",
-            "[mc_2_85]": "",
-            "[mc_3_85]": "",
             "[mc_nq_85]": "",
-            "[mc_1_50]": "",
-            "[mc_2_50]": "",
-            "[mc_3_50]": "",
             "[mc_nq_50]": "",
-            "[notes]": "* Todas as métricas desta squad usam o histórico de"
-        },
-        slide_id
-    )
+        }
+
+
+def fill_metrics():
+    slide_id = "1F_HyJ_FV8A-wafXVyniAlw7gQsTUcE5pa10QjrWTB5o"
+    response = batch_text_replace(text_replace, slide_id)
     return response
 
 
