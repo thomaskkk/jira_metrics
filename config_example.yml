@@ -1,0 +1,65 @@
+appName: JiraMetrics
+
+# How to connect to JIRA.
+# You can generate your apikey at https://id.atlassian.com/manage-profile/security/api-tokens
+Connection:
+    Domain: http://your_jira_instance.atlassian.net/ # your JIRA instance
+    Username: Your_jira_login # your jira login
+    ApiKey: Secret_here # your api token/key
+
+# Query - a JQL query to gather data, if you are smart you will remove Epics, Sub-tasks and other items like the example bellow.
+# NOTE: if you add more than 1 issuetype on JQL all of them must share the same workflow statuses!
+Query:
+    project = WO AND issuetype not in (Epic, Sub-task, Bug-task) AND resolution in (Done) AND resolutiondate >= "2020-11-07" AND resolutiondate <= "2021-02-07"
+
+# Workflow - you can group status in a similar way that you group more than 1 status in a column in your jira board
+Workflow: 
+    Backlog: Backlog
+    Discovery:
+        - Research
+        - Ideation
+        - Validation
+        - Refining
+    Refinement: Refinement
+    Ready to Develop: Ready to Develop
+    Development: 
+        - Development
+        - Selected for Development
+    In Progress: In Progress
+    Code Review: Code Review
+    Review: Review
+    Homolog: Staging
+    Ready to Deploy: Ready to Deploy
+    Done: Done
+
+# Right now you can't change the 3 types: Story, Bug, Task, but you can group other jira issuetypes in each of those 3 options
+Issuetype:
+    Story: Story
+    Bug: Bug
+    Task:
+        - Task
+        - Technical debt
+
+# Cycletime - A list of which columns the script should consider to calculate the cycletime
+Cycletime:
+    - Development
+    - In Progress
+    - Code Review
+    - Review
+    - Homolog
+    - Ready to Deploy
+    - Done
+
+# Simulations - how many simulations we should run 10k should give you a good result
+# Source - Which Throughput/day we should use to run the simulation, must be Story, Bug, Task or Throughput (sum of all 3)
+Montecarlo:
+    Simulations: 10000
+    Simulation Start Date: 2021-02-07
+    Simulation End Date: 2021-03-10
+    Source: Story
+
+# Percentiles - that the script should return, the script will return the nearest neighbor result
+Percentiles:
+    - 50
+    - 85
+    - 95

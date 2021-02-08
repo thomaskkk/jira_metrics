@@ -186,10 +186,12 @@ def read_dates(dictio):
     kanban_data.final_datetime = pd.to_datetime(
         kanban_data.final_datetime, unit='s'
     ).dt.date
+    # pd.set_option("display.max_rows", None, "display.max_columns", None)
     return kanban_data
 
 
 def calc_throughput(kanban_data):
+    """Change the pandas DF to a Troughput per day format"""
     # Calculate Throughput
     throughput = pd.crosstab(
         kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]
@@ -212,7 +214,6 @@ def calc_throughput(kanban_data):
     ).reindex(date_range).fillna(0).astype(int).rename_axis('Date')
     # throughput_per_week = pd.DataFrame(throughput['Throughput']
     # .resample('W-Mon').sum()).reset_index()
-    pd.set_option("display.max_rows", None, "display.max_columns", None)
     return throughput
 
 
@@ -222,12 +223,16 @@ def simulate_montecarlo(throughput):
 
     simul = cfg['Montecarlo']['Simulations'].get()
     simul_days = calc_simul_days()
+    source = cfg['Montecarlo']['Source'].get()
 
-    dataset = throughput[['Throughput']].reset_index(drop=True)
+    dataset = throughput[['Story']].reset_index(drop=True)
+
     samples = [dataset.sample(
         n=simul_days, replace=True
-    ).sum().Throughput for i in range(simul)]
+    ).sum().Story for i in range(simul)]
+    
     samples = pd.DataFrame(samples, columns=['Items'])
+
     distribution = samples.groupby(['Items']).size().reset_index(
         name='Frequency'
     )
@@ -264,7 +269,5 @@ if __name__ == "__main__":
     dictio = convert_cfd_table(issue)
     calc_cycletime_percentile(dictio)
     kanban_data = read_dates(dictio)
-    print(kanban_data.dtypes)
-    # tp = calc_throughput(kanban_data)
-    # dist = simulate_montecarlo(tp)
-    # print(dist)
+    tp = calc_throughput(kanban_data)
+    dist = simulate_montecarlo(tp)
