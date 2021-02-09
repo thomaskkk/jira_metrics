@@ -3,7 +3,7 @@
 import GoogleApiSupport.slides as slides
 import jira_metrics as jm
 import datetime as dt
-from dateutil.relativedelta import *
+from dateutil.relativedelta import relativedelta
 import confuse
 import math
 
@@ -29,7 +29,9 @@ def metrics_by_month():
     ct = jm.calc_cycletime_percentile(kanban_data, 85)
     ct = ct.div(60).div(24)
     tp = jm.calc_throughput(kanban_data)
-    mc = jm.simulate_montecarlo(tp, sources=['Story'], simul=10000, simul_days=simul_days_range(1))
+    mc = jm.simulate_montecarlo(
+        tp, sources=['Story'], simul=10000, simul_days=simul_days_range(1)
+        )
     tp = tp.sum(axis=0)
     text_replace = {
             "[s_squad_name]": cfg['Smallsquadname'].get(),
@@ -91,7 +93,9 @@ def metrics_by_month():
         ct = jm.calc_cycletime_percentile(kanban_data, 85)
         ct = ct.div(60).div(24)
         tp = jm.calc_throughput(kanban_data)
-        mc = jm.simulate_montecarlo(tp, sources=['Story'], simul=10000, simul_days=simul_days_range(2))
+        mc = jm.simulate_montecarlo(
+            tp, sources=['Story'], simul=10000, simul_days=simul_days_range(2)
+            )
         tp = tp.sum(axis=0)
         text_replace["[th1s]"] = str(tp.Story)
         text_replace["[th1t]"] = str(tp.Task)
@@ -101,16 +105,24 @@ def metrics_by_month():
         text_replace["[ct1t]"] = "{}d".format(math.ceil(ct.Task))
         text_replace["[ct1b]"] = "{}d".format(math.ceil(ct.Bug))
         text_replace["[ct_1_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
-        text_replace["[mc_2_95]"] = "{} items (US only)".format(mc['Story'][95])
-        text_replace["[mc_2_85]"] = "{} items (US only)".format(mc['Story'][85])
-        text_replace["[mc_2_50]"] = "{} items (US only)".format(mc['Story'][50])
+        text_replace["[mc_2_95]"] = "{} items (US only)".format(
+            mc['Story'][95]
+            )
+        text_replace["[mc_2_85]"] = "{} items (US only)".format(
+            mc['Story'][85]
+            )
+        text_replace["[mc_2_50]"] = "{} items (US only)".format(
+            mc['Story'][50]
+            )
 
     if months_after >= 2:
         kanban_data = gather_metrics_data(jql_search_range(3))
         ct = jm.calc_cycletime_percentile(kanban_data, 85)
         ct = ct.div(60).div(24)
         tp = jm.calc_throughput(kanban_data)
-        mc = jm.simulate_montecarlo(tp, sources=['Story'], simul=10000, simul_days=simul_days_range(3))
+        mc = jm.simulate_montecarlo(
+            tp, sources=['Story'], simul=10000, simul_days=simul_days_range(3)
+            )
         tp = tp.sum(axis=0)
         text_replace["[th2s]"] = str(tp.Story)
         text_replace["[th2t]"] = str(tp.Task)
@@ -120,9 +132,15 @@ def metrics_by_month():
         text_replace["[ct2t]"] = "{}d".format(math.ceil(ct.Task))
         text_replace["[ct2b]"] = "{}d".format(math.ceil(ct.Bug))
         text_replace["[ct_2_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
-        text_replace["[mc_3_95]"] = "{} items (US only)".format(mc['Story'][95])
-        text_replace["[mc_3_85]"] = "{} items (US only)".format(mc['Story'][85])
-        text_replace["[mc_3_50]"] = "{} items (US only)".format(mc['Story'][50])
+        text_replace["[mc_3_95]"] = "{} items (US only)".format(
+            mc['Story'][95]
+            )
+        text_replace["[mc_3_85]"] = "{} items (US only)".format(
+            mc['Story'][85]
+            )
+        text_replace["[mc_3_50]"] = "{} items (US only)".format(
+            mc['Story'][50]
+            )
 
     if months_after >= 3:
         text_replace["[th3s]"] = ""
@@ -141,7 +159,8 @@ def metrics_by_month():
 
 
 def jql_search_range(metrics_quarter):
-    """Return the jql string starting from the 1st day 3 months back and ending in the 1st of the current month"""
+    """Return the jql string starting from the 1st day 3 months back
+    and ending in the 1st of the current month"""
     today = dt.date.today()
     months_to_past_quarter = (today.month - metrics_quarter) % 3
     start_month = (-3) - months_to_past_quarter
@@ -150,11 +169,14 @@ def jql_search_range(metrics_quarter):
     start_date = today + relativedelta(day=1, months=start_month)
     end_date = today + relativedelta(day=31, months=end_month)
 
-    return 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(start_date, end_date)
+    return 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(
+        start_date, end_date
+        )
 
 
 def simul_days_range(metrics_quarter):
-    """Return the number of days from current date until the end of the quarter"""
+    """Return the number of days from current date until
+    the end of the quarter"""
     today = dt.date.today()
     months_to_past_quarter = - ((today.month - metrics_quarter) % 3)
     months_to_next_quarter = 2 - (today.month - 1) % 3

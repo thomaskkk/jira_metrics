@@ -154,13 +154,15 @@ def convert_jira_datetime(datetime_str):
 def calc_cycletime_percentile(kanban_data, percentile=None):
     """Calculate cycletime percentiles on cfg with all dict entries"""
     if percentile is not None:
-        issuetype = kanban_data.groupby('issuetype').cycletime.quantile(percentile / 100)
+        issuetype = kanban_data.groupby('issuetype').cycletime.quantile(
+            percentile / 100)
         issuetype['Total'] = kanban_data.cycletime.quantile(percentile / 100)
         return issuetype
     else:
         for cfg_percentile in cfg['Percentiles'].get():
-            total = kanban_data.cycletime.quantile(cfg_percentile / 100)
-            issuetype = kanban_data.groupby('issuetype').cycletime.quantile(cfg_percentile / 100)
+            # total = kanban_data.cycletime.quantile(cfg_percentile / 100)
+            issuetype = kanban_data.groupby('issuetype').cycletime.quantile(
+                cfg_percentile / 100)
 
 
 def read_dates(dictio):
