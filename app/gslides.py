@@ -16,30 +16,28 @@ def gather_metrics_data(jql_date_append):
     issue = jm.jql_search(jira, jql_date_append)
     dictio = jm.convert_cfd_table(issue)
     kanban_data = jm.read_dates(dictio)
-    
+
     return kanban_data
 
 
-
-
 def metrics_by_month():
-    months_after = (dt.datetime.now().month - 1) % 3
-    quarter = ((dt.datetime.now().month - 1) // 3) + 1
+    current_month = dt.datetime.now().month
+    months_after = (current_month - 1) % 3
+    quarter = ((current_month - 1) // 3) + 1
 
-    kanban_data = gather_metrics_data(jql_search_range(last_quarter=True))
+    kanban_data = gather_metrics_data(jql_search_range(1))
     ct = jm.calc_cycletime_percentile(kanban_data, 85)
     ct = ct.div(60).div(24)
-    
     tp = jm.calc_throughput(kanban_data)
-    mc = jm.simulate_montecarlo(tp)
+    mc = jm.simulate_montecarlo(tp, sources=['Story'], simul=10000, simul_days=simul_days_range(1))
     tp = tp.sum(axis=0)
     text_replace = {
             "[s_squad_name]": cfg['Smallsquadname'].get(),
             "[squad_name]": cfg['Squadname'].get(),
             "[quarter]": "Q" + str(quarter),
-            "[thpqs]": "{}".format(tp.Story),
-            "[thpqt]": "{}".format(tp.Task),
-            "[thpqb]": "{}".format(tp.Bug),
+            "[thpqs]": str(tp.Story),
+            "[thpqt]": str(tp.Task),
+            "[thpqb]": str(tp.Bug),
             "[th_pq_tot]": "{} items".format(tp.Throughput),
             "[ctpqs]": "{}d".format(math.ceil(ct.Story)),
             "[ctpqt]": "{}d".format(math.ceil(ct.Task)),
@@ -89,69 +87,82 @@ def metrics_by_month():
         }
 
     if months_after >= 1:
-        text_replace["[th1s]"] = ""
-        text_replace["[th1t]"] = ""
-        text_replace["[th1b]"] = ""
-        text_replace["[th_1_tot]"] = ""
-        text_replace["[ct1s]"] = ""
-        text_replace["[ct1t]"] = ""
-        text_replace["[ct1b]"] = ""
-        text_replace["[ct_1_tot]"] = ""
-        text_replace["[mc_2_95]"] = ""
-        text_replace["[mc_2_85]"] = ""
-        text_replace["[mc_2_50]"] = ""
+        kanban_data = gather_metrics_data(jql_search_range(2))
+        ct = jm.calc_cycletime_percentile(kanban_data, 85)
+        ct = ct.div(60).div(24)
+        tp = jm.calc_throughput(kanban_data)
+        mc = jm.simulate_montecarlo(tp, sources=['Story'], simul=10000, simul_days=simul_days_range(2))
+        tp = tp.sum(axis=0)
+        text_replace["[th1s]"] = str(tp.Story)
+        text_replace["[th1t]"] = str(tp.Task)
+        text_replace["[th1b]"] = str(tp.Bug)
+        text_replace["[th_1_tot]"] = "{} items".format(tp.Throughput)
+        text_replace["[ct1s]"] = "{}d".format(math.ceil(ct.Story))
+        text_replace["[ct1t]"] = "{}d".format(math.ceil(ct.Task))
+        text_replace["[ct1b]"] = "{}d".format(math.ceil(ct.Bug))
+        text_replace["[ct_1_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
+        text_replace["[mc_2_95]"] = "{} items (US only)".format(mc['Story'][95])
+        text_replace["[mc_2_85]"] = "{} items (US only)".format(mc['Story'][85])
+        text_replace["[mc_2_50]"] = "{} items (US only)".format(mc['Story'][50])
 
     if months_after >= 2:
-        text_replace["[th2s]"] = ""
-        text_replace["[th2t]"] = ""
-        text_replace["[th2b]"] = ""
-        text_replace["[th_2_tot]"] = ""
-        text_replace["[ct2s]"] = ""
-        text_replace["[ct2t]"] = ""
-        text_replace["[ct2b]"] = ""
-        text_replace["[ct_2_tot]"] = ""
-        text_replace["[mc_3_95]"] = ""
-        text_replace["[mc_3_85]"] = ""
-        text_replace["[mc_3_50]"] = ""
+        kanban_data = gather_metrics_data(jql_search_range(3))
+        ct = jm.calc_cycletime_percentile(kanban_data, 85)
+        ct = ct.div(60).div(24)
+        tp = jm.calc_throughput(kanban_data)
+        mc = jm.simulate_montecarlo(tp, sources=['Story'], simul=10000, simul_days=simul_days_range(3))
+        tp = tp.sum(axis=0)
+        text_replace["[th2s]"] = str(tp.Story)
+        text_replace["[th2t]"] = str(tp.Task)
+        text_replace["[th2b]"] = str(tp.Bug)
+        text_replace["[th_2_tot]"] = "{} items".format(tp.Throughput)
+        text_replace["[ct2s]"] = "{}d".format(math.ceil(ct.Story))
+        text_replace["[ct2t]"] = "{}d".format(math.ceil(ct.Task))
+        text_replace["[ct2b]"] = "{}d".format(math.ceil(ct.Bug))
+        text_replace["[ct_2_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
+        text_replace["[mc_3_95]"] = "{} items (US only)".format(mc['Story'][95])
+        text_replace["[mc_3_85]"] = "{} items (US only)".format(mc['Story'][85])
+        text_replace["[mc_3_50]"] = "{} items (US only)".format(mc['Story'][50])
 
     if months_after >= 3:
         text_replace["[th3s]"] = ""
         text_replace["[th3t]"] = ""
         text_replace["[th3b]"] = ""
         text_replace["[th_3_tot]"] = ""
-        text_replace["[thcqs]"] = ""
-        text_replace["[thcqt]"] = ""
-        text_replace["[thcqb]"] = ""
-        text_replace["[th_cq_tot]"] = ""
-        text_replace["[ct3s]"] = ""
-        text_replace["[ct3t]"] = ""
-        text_replace["[ct3b]"] = ""
-        text_replace["[ct_3_tot]"] = ""
-        text_replace["[mc_nq_95]"] = ""
-        text_replace["[mc_nq_85]"] = ""
-        text_replace["[mc_nq_50]"] = ""
+        # text_replace["[thcqs]"] = ""
+        # text_replace["[thcqt]"] = ""
+        # text_replace["[thcqb]"] = ""
+        # text_replace["[th_cq_tot]"] = ""
+        # text_replace["[mc_nq_95]"] = ""
+        # text_replace["[mc_nq_85]"] = ""
+        # text_replace["[mc_nq_50]"] = ""
 
     return text_replace
 
 
-def jql_search_range(last_quarter=False):
+def jql_search_range(metrics_quarter):
     """Return the jql string starting from the 1st day 3 months back and ending in the 1st of the current month"""
-    
-    start_month = -3
-    end_month = -1
+    today = dt.date.today()
+    months_to_past_quarter = (today.month - metrics_quarter) % 3
+    start_month = (-3) - months_to_past_quarter
+    end_month = (-1) - months_to_past_quarter
 
-    if last_quarter is True:
-        months_to_past_quarter = (dt.datetime.now().month - 1) % 3
-        start_month -= months_to_past_quarter
-        end_month -= months_to_past_quarter
-
-    start_date = dt.datetime.now() + relativedelta(day=1, months=start_month)
-    start_date = start_date.strftime('%Y-%m-%d')
-
-    end_date = dt.datetime.now() + relativedelta(day=31, months=end_month)
-    end_date = end_date.strftime('%Y-%m-%d')
+    start_date = today + relativedelta(day=1, months=start_month)
+    end_date = today + relativedelta(day=31, months=end_month)
 
     return 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(start_date, end_date)
+
+
+def simul_days_range(metrics_quarter):
+    """Return the number of days from current date until the end of the quarter"""
+    today = dt.date.today()
+    months_to_past_quarter = - ((today.month - metrics_quarter) % 3)
+    months_to_next_quarter = 2 - (today.month - 1) % 3
+
+    start_date = today + relativedelta(day=1, months=months_to_past_quarter)
+    end_date = today + relativedelta(day=31, months=months_to_next_quarter)
+
+    return (end_date - start_date).days
 
 
 def fill_metrics(text_replace):

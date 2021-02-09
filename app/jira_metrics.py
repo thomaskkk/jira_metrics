@@ -3,7 +3,6 @@
 import confuse
 from jira import JIRA
 from datetime import datetime as dt
-import numpy as np
 import math
 import pandas as pd
 
@@ -200,11 +199,15 @@ def calc_throughput(kanban_data):
     return throughput
 
 
-def simulate_montecarlo(throughput):
+def simulate_montecarlo(throughput, sources=None, simul=None, simul_days=None):
 
-    simul = cfg['Montecarlo']['Simulations'].get()
-    simul_days = calc_simul_days()
-    sources = cfg['Montecarlo']['Source'].get()
+    if sources is None:
+        sources = cfg['Montecarlo']['Source'].get()
+    if simul is None:
+        simul = cfg['Montecarlo']['Simulations'].get()
+    if simul_days is None:
+        simul_days = calc_simul_days()
+
     mc = {}
     for source in sources:
         mc[source] = run_simulation(throughput, source, simul, simul_days)
