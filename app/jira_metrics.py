@@ -205,8 +205,11 @@ def simulate_montecarlo(throughput):
     simul = cfg['Montecarlo']['Simulations'].get()
     simul_days = calc_simul_days()
     sources = cfg['Montecarlo']['Source'].get()
+    mc = {}
     for source in sources:
-        run_simulation(throughput, source, simul, simul_days)
+        mc[source] = run_simulation(throughput, source, simul, simul_days)
+
+    return mc
 
 
 def run_simulation(throughput, source, simul, simul_days):
@@ -230,10 +233,12 @@ def run_simulation(throughput, source, simul, simul_days):
         ) / distribution.Frequency.sum()
 
     print(" - For {}:".format(source))
+    mc_results = {}
     # Get nearest neighbor result
     for percentil in cfg['Percentiles'].get():
         result_index = distribution['Probability'].sub(percentil).abs()\
             .idxmin()
+        mc_results[percentil] = distribution.loc[result_index, 'Items']
         print(
             "For {}% -> Items: {} ({}%)"
             .format(
@@ -243,7 +248,7 @@ def run_simulation(throughput, source, simul, simul_days):
             )
         )
 
-    return distribution
+    return mc_results
 
 
 def calc_simul_days():

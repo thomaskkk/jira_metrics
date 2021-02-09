@@ -11,53 +11,6 @@ cfg = confuse.Configuration('JiraMetrics', __name__)
 cfg.set_file('config_test.yml')
 
 
-month_1 =  {
-            "[th1s]": "",
-            "[th1t]": "",
-            "[th1b]": "",
-            "[th_1_tot]": "",
-            "[ct1s]": "",
-            "[ct1t]": "",
-            "[ct1b]": "",
-            "[ct_1_tot]": "",
-            "[mc_2_95]": "",
-            "[mc_2_85]": "",
-            "[mc_2_50]": "",
-        }
-
-month_2 =  {
-            "[th2s]": "",
-            "[th2t]": "",
-            "[th2b]": "",
-            "[th_2_tot]": "",
-            "[ct2s]": "",
-            "[ct2t]": "",
-            "[ct2b]": "",
-            "[ct_2_tot]": "",
-            "[mc_3_95]": "",
-            "[mc_3_85]": "",
-            "[mc_3_50]": "",
-        }
-
-month_3 =  {
-            "[th3s]": "",
-            "[th3t]": "",
-            "[th3b]": "",
-            "[th_3_tot]": "",
-            "[thcqs]": "",
-            "[thcqt]": "",
-            "[thcqb]": "",
-            "[th_cq_tot]": "",
-            "[ct3s]": "",
-            "[ct3t]": "",
-            "[ct3b]": "",
-            "[ct_3_tot]": "",
-            "[mc_nq_95]": "",
-            "[mc_nq_85]": "",
-            "[mc_nq_50]": "",
-        }
-
-
 def gather_metrics_data(jql_date_append):
     jira = jm.atlassian_auth()
     issue = jm.jql_search(jira, jql_date_append)
@@ -78,33 +31,105 @@ def metrics_by_month():
     ct = ct.div(60).div(24)
     
     tp = jm.calc_throughput(kanban_data)
-    # dist = jm.simulate_montecarlo(tp)
+    mc = jm.simulate_montecarlo(tp)
     tp = tp.sum(axis=0)
-    print(ct)
     text_replace = {
             "[s_squad_name]": cfg['Smallsquadname'].get(),
             "[squad_name]": cfg['Squadname'].get(),
             "[quarter]": "Q" + str(quarter),
-            "[thpqs]": "{} items".format(tp.Story),
-            "[thpqt]": "{} items".format(tp.Task),
-            "[thpqb]": "{} items".format(tp.Bug),
+            "[thpqs]": "{}".format(tp.Story),
+            "[thpqt]": "{}".format(tp.Task),
+            "[thpqb]": "{}".format(tp.Bug),
             "[th_pq_tot]": "{} items".format(tp.Throughput),
             "[ctpqs]": "{}d".format(math.ceil(ct.Story)),
             "[ctpqt]": "{}d".format(math.ceil(ct.Task)),
             "[ctpqb]": "{}d".format(math.ceil(ct.Bug)),
             "[ct_pq_tot]": "{}d (85%)".format(math.ceil(ct.Total)),
-            "[mc_1_95]": "{} items (US only)".format(),
-            "[mc_1_85]": "{} items (US only)".format(),
-            "[mc_1_50]": "{} items (US only)".format(),
+            "[mc_1_95]": "{} items (US only)".format(mc['Story'][95]),
+            "[mc_1_85]": "{} items (US only)".format(mc['Story'][85]),
+            "[mc_1_50]": "{} items (US only)".format(mc['Story'][50]),
+            "[th1s]": "",
+            "[th1t]": "",
+            "[th1b]": "",
+            "[th_1_tot]": "",
+            "[ct1s]": "",
+            "[ct1t]": "",
+            "[ct1b]": "",
+            "[ct_1_tot]": "",
+            "[mc_2_95]": "",
+            "[mc_2_85]": "",
+            "[mc_2_50]": "",
+            "[th2s]": "",
+            "[th2t]": "",
+            "[th2b]": "",
+            "[th_2_tot]": "",
+            "[ct2s]": "",
+            "[ct2t]": "",
+            "[ct2b]": "",
+            "[ct_2_tot]": "",
+            "[mc_3_95]": "",
+            "[mc_3_85]": "",
+            "[mc_3_50]": "",
+            "[th3s]": "",
+            "[th3t]": "",
+            "[th3b]": "",
+            "[th_3_tot]": "",
+            "[thcqs]": "",
+            "[thcqt]": "",
+            "[thcqb]": "",
+            "[th_cq_tot]": "",
+            "[ct3s]": "",
+            "[ct3t]": "",
+            "[ct3b]": "",
+            "[ct_3_tot]": "",
+            "[mc_nq_95]": "",
+            "[mc_nq_85]": "",
+            "[mc_nq_50]": "",
             "[notes]": cfg['Notes'].get()
         }
 
-    # if months_after >= 1:
-    # text_replace = {**x, **y}
-    # if months_after >= 2:
-    # text_replace = {**x, **y}
-    # if months_after >= 3:
-    # text_replace = {**x, **y}
+    if months_after >= 1:
+        text_replace["[th1s]"] = ""
+        text_replace["[th1t]"] = ""
+        text_replace["[th1b]"] = ""
+        text_replace["[th_1_tot]"] = ""
+        text_replace["[ct1s]"] = ""
+        text_replace["[ct1t]"] = ""
+        text_replace["[ct1b]"] = ""
+        text_replace["[ct_1_tot]"] = ""
+        text_replace["[mc_2_95]"] = ""
+        text_replace["[mc_2_85]"] = ""
+        text_replace["[mc_2_50]"] = ""
+
+    if months_after >= 2:
+        text_replace["[th2s]"] = ""
+        text_replace["[th2t]"] = ""
+        text_replace["[th2b]"] = ""
+        text_replace["[th_2_tot]"] = ""
+        text_replace["[ct2s]"] = ""
+        text_replace["[ct2t]"] = ""
+        text_replace["[ct2b]"] = ""
+        text_replace["[ct_2_tot]"] = ""
+        text_replace["[mc_3_95]"] = ""
+        text_replace["[mc_3_85]"] = ""
+        text_replace["[mc_3_50]"] = ""
+
+    if months_after >= 3:
+        text_replace["[th3s]"] = ""
+        text_replace["[th3t]"] = ""
+        text_replace["[th3b]"] = ""
+        text_replace["[th_3_tot]"] = ""
+        text_replace["[thcqs]"] = ""
+        text_replace["[thcqt]"] = ""
+        text_replace["[thcqb]"] = ""
+        text_replace["[th_cq_tot]"] = ""
+        text_replace["[ct3s]"] = ""
+        text_replace["[ct3t]"] = ""
+        text_replace["[ct3b]"] = ""
+        text_replace["[ct_3_tot]"] = ""
+        text_replace["[mc_nq_95]"] = ""
+        text_replace["[mc_nq_85]"] = ""
+        text_replace["[mc_nq_50]"] = ""
 
     return text_replace
 
@@ -162,4 +187,6 @@ def batch_text_replace(text_mapping: dict, presentation_id: str, pages=None):
 
 
 if __name__ == "__main__":
-    print(metrics_by_month())
+    text_replace = metrics_by_month()
+    response = fill_metrics(text_replace)
+    print(response)
