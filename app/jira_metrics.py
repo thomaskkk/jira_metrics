@@ -23,14 +23,14 @@ def atlassian_auth():
     return jira
 
 
-def jql_search(jira_obj):
+def jql_search(jira_obj, jql_date_append=str()):
     """Run a JQL search and return the jira object with results"""
     sfields = [
         "created",
         "issuetype"
     ]
-    issues = jira.search_issues(
-        cfg['Query'].get(),
+    issues = jira_obj.search_issues(
+        cfg['Query'].get() + jql_date_append,
         fields=sfields,
         maxResults=99999,
         expand='changelog'
@@ -120,6 +120,7 @@ def group_issuetype(issuetype):
         else:
             if value1 == issuetype:
                 return key1
+    raise Exception("Can't find issue in config file: {}".format(issuetype))
 
 
 def group_status(status):
@@ -132,6 +133,7 @@ def group_status(status):
         else:
             if value1.lower() == status.lower():
                 return key1.lower()
+    raise Exception("Can't find status in config file: {}".format(status))
 
 
 def calc_diff_date_to_unix(start_datetime, end_datetime):
@@ -150,35 +152,16 @@ def convert_jira_datetime(datetime_str):
     return dt.timestamp(time)
 
 
-def calc_cycletime_percentile(dictio):
+def calc_cycletime_percentile(kanban_data, percentile=None):
     """Calculate cycletime percentiles on cfg with all dict entries"""
-    # auxiliary dict with the colums that should be added to cycletime calc
-    cycletime = []
-    for entry in dictio:
-        cycletime.append(entry['cycletime'])
-
-    if len(dictio) >= 1 and len(cycletime) >= 1:
-        print("Your throughput is of {} items".format(len(dictio)))
-        for percentile in cfg['Percentiles'].get():
-            minutes = np.percentile(cycletime, percentile)
-            minutes_in_day = 60 * 24
-            minutes_in_hour = 60
-
-            days = math.ceil(minutes // minutes_in_day)
-            hours = math.ceil(
-                (minutes - (days*minutes_in_day))
-                // minutes_in_hour
-            )
-            minutes = math.ceil(
-                (minutes -
-                    (days * minutes_in_day) - (hours * minutes_in_hour))
-            )
-            print(
-                "Cycletime Percentile of {}% is {} days {} hours {} minutes"
-                .format(percentile, days, hours, minutes)
-            )
+    if percentile is not None:
+        issuetype = kanban_data.groupby('issuetype').cycletime.quantile(percentile / 100)
+        issuetype['Total'] = kanban_data.cycletime.quantile(percentile / 100)
+        return issuetype
     else:
-        print("No items from query or to calculate percentiles")
+        for cfg_percentile in cfg['Percentiles'].get():
+            total = kanban_data.cycletime.quantile(cfg_percentile / 100)
+            issuetype = kanban_data.groupby('issuetype').cycletime.quantile(cfg_percentile / 100)
 
 
 def read_dates(dictio):
@@ -218,7 +201,7 @@ def calc_throughput(kanban_data):
 
 
 def simulate_montecarlo(throughput):
-    
+
     simul = cfg['Montecarlo']['Simulations'].get()
     simul_days = calc_simul_days()
     sources = cfg['Montecarlo']['Source'].get()
@@ -228,8 +211,8 @@ def simulate_montecarlo(throughput):
 
 def run_simulation(throughput, source, simul, simul_days):
     """Run monte carlo simulation with the result of how many itens will
-     be delivered in a set of days """
-    
+    be delivered in a set of days """
+
     dataset = throughput[[source]].reset_index(drop=True)
 
     samples = [getattr(dataset.sample(
@@ -263,7 +246,6 @@ def run_simulation(throughput, source, simul, simul_days):
     return distribution
 
 
-
 def calc_simul_days():
     start = cfg['Montecarlo']['Simulation Start Date'].get()
     end = cfg['Montecarlo']['Simulation End Date'].get()
@@ -274,7 +256,7 @@ if __name__ == "__main__":
     jira = atlassian_auth()
     issue = jql_search(jira)
     dictio = convert_cfd_table(issue)
-    calc_cycletime_percentile(dictio)
     kanban_data = read_dates(dictio)
-    tp = calc_throughput(kanban_data)
-    dist = simulate_montecarlo(tp)
+    # calc_cycletime_percentile(dictio)
+    # tp = calc_throughput(kanban_data)
+    # dist = simulate_montecarlo(tp)
