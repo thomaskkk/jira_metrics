@@ -9,3 +9,4 @@ confuse>=1.4.0
 jira==3.0a2
 numpy>=1.20.0
 pandas>=1.2.1
+google-api-support>=0.0.4

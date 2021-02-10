@@ -3,7 +3,6 @@
 import confuse
 from jira import JIRA
 from datetime import datetime as dt
-import numpy as np
 import math
 import pandas as pd
 
@@ -23,15 +22,25 @@ def atlassian_auth():
     return jira
 
 
-def jql_search(jira_obj):
+def jql_search(jira_obj, jql_query=None):
     """Run a JQL search and return the jira object with results"""
-    issues = jira.search_issues(
-        cfg['Query'].get(), maxResults=99999, expand='changelog'
+    sfields = [
+        "created",
+        "issuetype"
+    ]
+    if jql_query is None:
+        jql_query = cfg['Query'].get()
+
+    issues = jira_obj.search_issues(
+        jql_query,
+        fields=sfields,
+        maxResults=99999,
+        expand='changelog'
     )
     return issues
 
 
-def convert_cfd_table(issues_obj, jira_obj):
+def convert_cfd_table(issues_obj):
     """Convert the issues obj into a dictionary on the cfd format"""
     cfd_table = []
     for issue in issues_obj:
@@ -113,6 +122,7 @@ def group_issuetype(issuetype):
         else:
             if value1 == issuetype:
                 return key1
+    raise Exception("Can't find issue in config file: {}".format(issuetype))
 
 
 def group_status(status):
@@ -125,6 +135,7 @@ def group_status(status):
         else:
             if value1.lower() == status.lower():
                 return key1.lower()
+    raise Exception("Can't find status in config file: {}".format(status))
 
 
 def calc_diff_date_to_unix(start_datetime, end_datetime):
@@ -143,35 +154,22 @@ def convert_jira_datetime(datetime_str):
     return dt.timestamp(time)
 
 
-def calc_cycletime_percentile(dictio):
+def calc_cycletime_percentile(kanban_data, percentile=None):
     """Calculate cycletime percentiles on cfg with all dict entries"""
-    # auxiliary dict with the colums that should be added to cycletime calc
-    cycletime = []
-    for entry in dictio:
-        cycletime.append(entry['cycletime'])
-
-    if len(dictio) >= 1 and len(cycletime) >= 1:
-        print("Your throughput is of {} items".format(len(dictio)))
-        for percentile in cfg['Percentiles'].get():
-            minutes = np.percentile(cycletime, percentile)
-            minutes_in_day = 60 * 24
-            minutes_in_hour = 60
-
-            days = math.ceil(minutes // minutes_in_day)
-            hours = math.ceil(
-                (minutes - (days*minutes_in_day))
-                // minutes_in_hour
-            )
-            minutes = math.ceil(
-                (minutes -
-                    (days * minutes_in_day) - (hours * minutes_in_hour))
-            )
-            print(
-                "Cycletime Percentile of {}% is {} days {} hours {} minutes"
-                .format(percentile, days, hours, minutes)
-            )
+    if percentile is not None:
+        issuetype = kanban_data.groupby('issuetype').cycletime.quantile(
+            percentile / 100)
+        issuetype['Total'] = kanban_data.cycletime.quantile(percentile / 100)
+        return issuetype
     else:
-        print("No items from query or to calculate percentiles")
+        for cfg_percentile in cfg['Percentiles'].get():
+            cycletime = kanban_data.groupby('issuetype').cycletime.quantile(
+                cfg_percentile / 100)
+            cycletime['Total'] = kanban_data.cycletime.quantile(
+                cfg_percentile / 100)
+            cycletime = cycletime.div(60).div(24)
+            print("Cycletime {}% (in days):".format(cfg_percentile))
+            print(cycletime)
 
 
 def read_dates(dictio):
@@ -179,10 +177,12 @@ def read_dates(dictio):
     kanban_data.final_datetime = pd.to_datetime(
         kanban_data.final_datetime, unit='s'
     ).dt.date
+    # pd.set_option("display.max_rows", None, "display.max_columns", None)
     return kanban_data
 
 
 def calc_throughput(kanban_data):
+    """Change the pandas DF to a Troughput per day format"""
     # Calculate Throughput
     throughput = pd.crosstab(
         kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]
@@ -205,22 +205,37 @@ def calc_throughput(kanban_data):
     ).reindex(date_range).fillna(0).astype(int).rename_axis('Date')
     # throughput_per_week = pd.DataFrame(throughput['Throughput']
     # .resample('W-Mon').sum()).reset_index()
-    pd.set_option("display.max_rows", None, "display.max_columns", None)
     return throughput
 
 
-def simulate_montecarlo(throughput):
+def simulate_montecarlo(throughput, sources=None, simul=None, simul_days=None):
+
+    if sources is None:
+        sources = cfg['Montecarlo']['Source'].get()
+    if simul is None:
+        simul = cfg['Montecarlo']['Simulations'].get()
+    if simul_days is None:
+        simul_days = calc_simul_days()
+
+    mc = {}
+    for source in sources:
+        mc[source] = run_simulation(throughput, source, simul, simul_days)
+
+    return mc
+
+
+def run_simulation(throughput, source, simul, simul_days):
     """Run monte carlo simulation with the result of how many itens will
-     be delivered in a set of days """
+    be delivered in a set of days """
 
-    simul = cfg['Montecarlo']['Simulations'].get()
-    simul_days = calc_simul_days()
+    dataset = throughput[[source]].reset_index(drop=True)
 
-    dataset = throughput[['Throughput']].reset_index(drop=True)
-    samples = [dataset.sample(
+    samples = [getattr(dataset.sample(
         n=simul_days, replace=True
-    ).sum().Throughput for i in range(simul)]
+    ).sum(), source) for i in range(simul)]
+
     samples = pd.DataFrame(samples, columns=['Items'])
+
     distribution = samples.groupby(['Items']).size().reset_index(
         name='Frequency'
     )
@@ -229,10 +244,13 @@ def simulate_montecarlo(throughput):
             100*distribution.Frequency.cumsum()
         ) / distribution.Frequency.sum()
 
-    # Get nearest result
+    print(" - For {}:".format(source))
+    mc_results = {}
+    # Get nearest neighbor result
     for percentil in cfg['Percentiles'].get():
         result_index = distribution['Probability'].sub(percentil).abs()\
             .idxmin()
+        mc_results[percentil] = distribution.loc[result_index, 'Items']
         print(
             "For {}% -> Items: {} ({}%)"
             .format(
@@ -242,7 +260,7 @@ def simulate_montecarlo(throughput):
             )
         )
 
-    return distribution
+    return mc_results
 
 
 def calc_simul_days():
@@ -254,9 +272,8 @@ def calc_simul_days():
 if __name__ == "__main__":
     jira = atlassian_auth()
     issue = jql_search(jira)
-    dictio = convert_cfd_table(issue, jira)
-    calc_cycletime_percentile(dictio)
+    dictio = convert_cfd_table(issue)
     kanban_data = read_dates(dictio)
+    calc_cycletime_percentile(kanban_data)
     tp = calc_throughput(kanban_data)
     dist = simulate_montecarlo(tp)
-    print(dist)
