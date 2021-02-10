@@ -22,14 +22,17 @@ def atlassian_auth():
     return jira
 
 
-def jql_search(jira_obj, jql_date_append=str()):
+def jql_search(jira_obj, jql_query=None):
     """Run a JQL search and return the jira object with results"""
     sfields = [
         "created",
         "issuetype"
     ]
+    if jql_query is None:
+        jql_query = cfg['Query'].get()
+
     issues = jira_obj.search_issues(
-        cfg['Query'].get() + jql_date_append,
+        jql_query,
         fields=sfields,
         maxResults=99999,
         expand='changelog'
@@ -160,9 +163,13 @@ def calc_cycletime_percentile(kanban_data, percentile=None):
         return issuetype
     else:
         for cfg_percentile in cfg['Percentiles'].get():
-            # total = kanban_data.cycletime.quantile(cfg_percentile / 100)
-            issuetype = kanban_data.groupby('issuetype').cycletime.quantile(
+            cycletime = kanban_data.groupby('issuetype').cycletime.quantile(
                 cfg_percentile / 100)
+            cycletime['Total'] = kanban_data.cycletime.quantile(
+                cfg_percentile / 100)
+            cycletime = cycletime.div(60).div(24)
+            print("Cycletime {}% (in days):".format(cfg_percentile))
+            print(cycletime)
 
 
 def read_dates(dictio):
@@ -267,6 +274,6 @@ if __name__ == "__main__":
     issue = jql_search(jira)
     dictio = convert_cfd_table(issue)
     kanban_data = read_dates(dictio)
-    # calc_cycletime_percentile(dictio)
-    # tp = calc_throughput(kanban_data)
-    # dist = simulate_montecarlo(tp)
+    calc_cycletime_percentile(kanban_data)
+    tp = calc_throughput(kanban_data)
+    dist = simulate_montecarlo(tp)

@@ -7,28 +7,39 @@ Connection:
     Username: Your_jira_login # your jira login
     ApiKey: Secret_here # your api token/key
 
+Squadname: Write-off
+
+Smallsquadname: WO
+
+Notes: '* Todas as métricas desta squad usam o histórico de 3 meses'
+
+Slideid: 1F_HyJ_FV8A-wafXVyniAlw7gQsTUcE5pa10QjrWTB5o
+
 # Query - a JQL query to gather data, if you are smart you will remove Epics, Sub-tasks and other items like the example bellow.
 # NOTE: if you add more than 1 issuetype on JQL all of them must share the same workflow statuses!
 Query:
-    project = WO AND issuetype not in (Epic, Sub-task, Bug-task) AND resolution in (Done) AND resolutiondate >= "2020-11-07" AND resolutiondate <= "2021-02-07"
+    # project = WO AND issuetype not in (Epic, Sub-task, Bug-task) AND resolution in (Done) AND resolutiondate >= "2020-11-07" AND resolutiondate <= "2021-02-07"
+    project = WO AND issuetype not in (Epic, Sub-task, Bug-task) AND resolution in (Done)
 
 # Workflow - you can group status in a similar way that you group more than 1 status in a column in your jira board
+# NOTE: since we recover from issue history, old status from past workflows should be also added here
 Workflow: 
     Backlog: Backlog
     Discovery:
+        - Discovery
         - Research
         - Ideation
         - Validation
         - Refining
-    Refinement: Refinement
-    Ready to Develop: Ready to Develop
-    Development: 
-        - Development
-        - Selected for Development
-    In Progress: In Progress
+        - Refinement
+    Ready to Develop:
+        - Ready to Develop
+        - Sprint Backlog
+    Development: Development
     Code Review: Code Review
-    Review: Review
-    Homolog: Staging
+    Homolog:
+        - Homolog
+        - Staging
     Ready to Deploy: Ready to Deploy
     Done: Done
 
@@ -63,3 +74,10 @@ Percentiles:
     - 50
     - 85
     - 95
+
+Gslides:
+    Squadname: Write-off
+    Smallsquadname: WO
+    Notes: '* Todas as métricas desta squad usam o histórico de 3 meses'
+    Slideid: 1F_HyJ_FV8A-wafXVyniAlw7gQsTUcE5pa10QjrWTB5o
+    Query: project = WO AND issuetype not in (Epic, Sub-task, Bug-task) AND resolution in (Done)
