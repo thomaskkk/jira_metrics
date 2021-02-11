@@ -7,14 +7,6 @@ Connection:
     Username: Your_jira_login # your jira login
     ApiKey: Secret_here # your api token/key
 
-Squadname: Write-off
-
-Smallsquadname: WO
-
-Notes: '* Todas as métricas desta squad usam o histórico de 3 meses'
-
-Slideid: 1F_HyJ_FV8A-wafXVyniAlw7gQsTUcE5pa10QjrWTB5o
-
 # Query - a JQL query to gather data, if you are smart you will remove Epics, Sub-tasks and other items like the example bellow.
 # NOTE: if you add more than 1 issuetype on JQL all of them must share the same workflow statuses!
 Query:
@@ -26,15 +18,13 @@ Query:
 Workflow: 
     Backlog: Backlog
     Discovery:
-        - Discovery
         - Research
         - Ideation
         - Validation
         - Refining
         - Refinement
-    Ready to Develop:
-        - Ready to Develop
-        - Sprint Backlog
+        - Discovery
+    Ready to Develop: Ready to Develop
     Development: Development
     Code Review: Code Review
     Homolog:
@@ -54,9 +44,7 @@ Issuetype:
 # Cycletime - A list of which columns the script should consider to calculate the cycletime
 Cycletime:
     - Development
-    - In Progress
     - Code Review
-    - Review
     - Homolog
     - Ready to Deploy
     - Done
@@ -67,7 +55,8 @@ Montecarlo:
     Simulations: 10000
     Simulation Start Date: 2021-02-07
     Simulation End Date: 2021-03-10
-    Source: Story
+    Source: 
+        - Story
 
 # Percentiles - that the script should return, the script will return the nearest neighbor result
 Percentiles:
@@ -79,5 +68,5 @@ Gslides:
     Squadname: Write-off
     Smallsquadname: WO
     Notes: '* Todas as métricas desta squad usam o histórico de 3 meses'
-    Slideid: 1F_HyJ_FV8A-wafXVyniAlw7gQsTUcE5pa10QjrWTB5o
+    Presentationid: 1F_HyJ_FV8A-wafXVyniAlw7gQsTUcE5pa10QjrWTB5o
     Query: project = WO AND issuetype not in (Epic, Sub-task, Bug-task) AND resolution in (Done)

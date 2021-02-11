@@ -2,16 +2,25 @@
 
 import confuse
 from jira import JIRA
-from datetime import datetime as dt
+import datetime as dt
 import math
 import pandas as pd
+from dateutil.relativedelta import relativedelta
+import uuid
+import os
+import GoogleApiSupport.slides as slides
+
 
 cfg = confuse.Configuration('JiraMetrics', __name__)
 cfg.set_file('config_test.yml')
 
 
-def atlassian_auth():
+def atlassian_auth(override_config_filename=None):
     """Authenticate on the Jira Cloud instance"""
+
+    if override_config_filename is not None:
+        cfg.set_file(override_config_filename)
+
     username = cfg['Connection']['Username'].get()
     api = cfg['Connection']['ApiKey'].get()
 
@@ -37,6 +46,7 @@ def jql_search(jira_obj, jql_query=None):
         maxResults=99999,
         expand='changelog'
     )
+    print(jql_query)
     return issues
 
 
@@ -135,6 +145,7 @@ def group_status(status):
         else:
             if value1.lower() == status.lower():
                 return key1.lower()
+
     raise Exception("Can't find status in config file: {}".format(status))
 
 
@@ -150,8 +161,8 @@ def calc_diff_date_to_unix(start_datetime, end_datetime):
 
 def convert_jira_datetime(datetime_str):
     """Convert Jira datetime format to unix timestamp"""
-    time = dt.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S.%f%z')
-    return dt.timestamp(time)
+    time = dt.datetime.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S.%f%z')
+    return dt.datetime.timestamp(time)
 
 
 def calc_cycletime_percentile(kanban_data, percentile=None):
@@ -177,7 +188,6 @@ def read_dates(dictio):
     kanban_data.final_datetime = pd.to_datetime(
         kanban_data.final_datetime, unit='s'
     ).dt.date
-    # pd.set_option("display.max_rows", None, "display.max_columns", None)
     return kanban_data
 
 
@@ -203,8 +213,6 @@ def calc_throughput(kanban_data):
     throughput = throughput.set_index(
         'final_datetime'
     ).reindex(date_range).fillna(0).astype(int).rename_axis('Date')
-    # throughput_per_week = pd.DataFrame(throughput['Throughput']
-    # .resample('W-Mon').sum()).reset_index()
     return throughput
 
 
@@ -269,11 +277,259 @@ def calc_simul_days():
     return (end - start).days
 
 
-if __name__ == "__main__":
+def gather_metrics_data(jql_query):
     jira = atlassian_auth()
-    issue = jql_search(jira)
+    issue = jql_search(jira, jql_query)
     dictio = convert_cfd_table(issue)
     kanban_data = read_dates(dictio)
-    calc_cycletime_percentile(kanban_data)
+
+    return kanban_data
+
+
+def metrics_by_month():
+    current_month = dt.datetime.now().month
+    months_after = (current_month - 1) % 3
+    quarter = ((current_month - 1) // 3) + 1
+    jql_query = str(cfg['Gslides']['Query'])
+
+    # Past quarter results and 1st month forecast
+    kanban_data = gather_metrics_data(jql_query + jql_search_range(0))
+    ct = calc_cycletime_percentile(kanban_data, 85)
+    ct = ct.div(60).div(24)
     tp = calc_throughput(kanban_data)
-    dist = simulate_montecarlo(tp)
+    mc = simulate_montecarlo(
+        tp, sources=['Story'], simul=10000, simul_days=simul_days_range(0)
+        )
+    tp = tp.sum(axis=0)
+    text_replace = {
+            "[s_squad_name]": cfg['Gslides']['Smallsquadname'].get(),
+            "[squad_name]": cfg['Gslides']['Squadname'].get(),
+            "[quarter]": "Q" + str(quarter),
+            "[thpqs]": str(getattr(tp, "Story", 0)),
+            "[thpqt]": str(getattr(tp, "Task", 0)),
+            "[thpqb]": str(getattr(tp, "Bug", 0)),
+            "[th_pq_tot]": "{} items".format(tp.Throughput),
+            "[ctpqs]": "{}d".format(math.ceil(getattr(ct, "Story", 0))),
+            "[ctpqt]": "{}d".format(math.ceil(getattr(ct, "Task", 0))),
+            "[ctpqb]": "{}d".format(math.ceil(getattr(ct, "Bug", 0))),
+            "[ct_pq_tot]": "{}d (85%)".format(math.ceil(ct.Total)),
+            "[mc_1_95]": "{} items (US only)".format(mc['Story'][95]),
+            "[mc_1_85]": "{} items (US only)".format(mc['Story'][85]),
+            "[mc_1_50]": "{} items (US only)".format(mc['Story'][50]),
+            "[th1s]": "",
+            "[th1t]": "",
+            "[th1b]": "",
+            "[th_1_tot]": "",
+            "[ct1s]": "",
+            "[ct1t]": "",
+            "[ct1b]": "",
+            "[ct_1_tot]": "",
+            "[mc_2_95]": "",
+            "[mc_2_85]": "",
+            "[mc_2_50]": "",
+            "[th2s]": "",
+            "[th2t]": "",
+            "[th2b]": "",
+            "[th_2_tot]": "",
+            "[ct2s]": "",
+            "[ct2t]": "",
+            "[ct2b]": "",
+            "[ct_2_tot]": "",
+            "[mc_3_95]": "",
+            "[mc_3_85]": "",
+            "[mc_3_50]": "",
+            "[th3s]": "",
+            "[th3t]": "",
+            "[th3b]": "",
+            "[th_3_tot]": "",
+            "[thcqs]": "",
+            "[thcqt]": "",
+            "[thcqb]": "",
+            "[th_cq_tot]": "",
+            "[ct3s]": "",
+            "[ct3t]": "",
+            "[ct3b]": "",
+            "[ct_3_tot]": "",
+            "[mc_nq_95]": "",
+            "[mc_nq_85]": "",
+            "[mc_nq_50]": "",
+            "[notes]": cfg['Gslides']['Notes'].get()
+        }
+
+    # 1st month results and 2st month forecast
+    kanban_data = gather_metrics_data(jql_query + jql_search_range(1))
+    ct = calc_cycletime_percentile(kanban_data, 85)
+    ct = ct.div(60).div(24)
+    tp = calc_throughput(kanban_data)
+    mc = simulate_montecarlo(
+        tp, sources=['Story'], simul=10000, simul_days=simul_days_range(1)
+        )
+    tp = tp.sum(axis=0)
+    text_replace["[th1s]"] = str(getattr(tp, "Story", 0))
+    text_replace["[th1t]"] = str(getattr(tp, "Task", 0))
+    text_replace["[th1b]"] = str(getattr(tp, "Bug", 0))
+    text_replace["[th_1_tot]"] = "{} items".format(tp.Throughput)
+    text_replace["[ct1s]"] = "{}d".format(math.ceil(getattr(tp, "Bug", 0)))
+    text_replace["[ct1t]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
+    text_replace["[ct1b]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
+    text_replace["[ct_1_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
+    text_replace["[mc_2_95]"] = "{} items (US only)".format(
+        mc['Story'][95]
+        )
+    text_replace["[mc_2_85]"] = "{} items (US only)".format(
+        mc['Story'][85]
+        )
+    text_replace["[mc_2_50]"] = "{} items (US only)".format(
+        mc['Story'][50]
+        )
+
+    if months_after >= 1:
+        # 2nd month results and 3rd month forecast
+        kanban_data = gather_metrics_data(jql_query + jql_search_range(2))
+        ct = calc_cycletime_percentile(kanban_data, 85)
+        ct = ct.div(60).div(24)
+        tp = calc_throughput(kanban_data)
+        mc = simulate_montecarlo(
+            tp, sources=['Story'], simul=10000, simul_days=simul_days_range(2)
+            )
+        tp = tp.sum(axis=0)
+        text_replace["[th2s]"] = str(getattr(tp, "Story", 0))
+        text_replace["[th2t]"] = str(getattr(tp, "Task", 0))
+        text_replace["[th2b]"] = str(getattr(tp, "Bug", 0))
+        text_replace["[th_2_tot]"] = "{} items".format(tp.Throughput)
+        text_replace["[ct2s]"] = "{}d".format(math.ceil(getattr(tp, "Bug", 0)))
+        text_replace["[ct2t]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
+        text_replace["[ct2b]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
+        text_replace["[ct_2_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
+        text_replace["[mc_3_95]"] = "{} items (US only)".format(
+            mc['Story'][95]
+            )
+        text_replace["[mc_3_85]"] = "{} items (US only)".format(
+            mc['Story'][85]
+            )
+        text_replace["[mc_3_50]"] = "{} items (US only)".format(
+            mc['Story'][50]
+            )
+
+    if months_after >= 2:
+        # 3rd month results, quarter totals and next forecast
+        kanban_data = gather_metrics_data(jql_query + jql_search_range(3))
+        ct = calc_cycletime_percentile(kanban_data, 85)
+        ct = ct.div(60).div(24)
+        tp = calc_throughput(kanban_data)
+        mc = simulate_montecarlo(
+            tp, sources=['Story'], simul=10000, simul_days=simul_days_range(3)
+            )
+        tp = tp.sum(axis=0)
+        text_replace["[th3s]"] = str(getattr(tp, "Story", 0))
+        text_replace["[th3t]"] = str(getattr(tp, "Task", 0))
+        text_replace["[th3b]"] = str(getattr(tp, "Bug", 0))
+        text_replace["[th_3_tot]"] = "{} items".format(tp.Throughput)
+        # text_replace["[thcqs]"] = ""
+        # text_replace["[thcqt]"] = ""
+        # text_replace["[thcqb]"] = ""
+        # text_replace["[th_cq_tot]"] = ""
+        # text_replace["[mc_nq_95]"] = ""
+        # text_replace["[mc_nq_85]"] = ""
+        # text_replace["[mc_nq_50]"] = ""
+
+    return text_replace
+
+
+def jql_search_range(metrics_month):
+    """Return the jql string starting from the 1st day 3 months back
+    and ending in the 1st of the current month"""
+
+    today = dt.date.today()
+    months_to_past_quarter = ((today.month - 1) % 3)
+    start_month = (metrics_month-months_to_past_quarter) - 3
+    end_month = (metrics_month - months_to_past_quarter) - 1
+
+    start_date = today + relativedelta(day=1, months=start_month)
+    end_date = today + relativedelta(day=31, months=end_month)
+
+    return 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(
+        start_date, end_date
+        )
+
+
+def simul_days_range(metrics_month):
+    """Return the number of days from current month until
+    the end of the quarter """
+
+    today = dt.date.today()
+    months_to_past_quarter = ((today.month - 1) % 3)
+    start_month = (metrics_month - months_to_past_quarter) - 1
+    months_to_next_quarter = 2 - (today.month - 1) % 3
+
+    start_date = today + relativedelta(day=1, months=start_month)
+    end_date = today + relativedelta(day=31, months=months_to_next_quarter)
+
+    return (end_date - start_date).days
+
+
+def fill_metrics(text_replace, pages=None):
+    presentation_id = cfg['Gslides']['Presentationid'].get()
+    if pages is None:
+        pages = list()
+
+    requests = []
+    for placeholder_text, new_value in text_replace.items():
+        if type(new_value) is str:
+            requests += [
+                {
+                    "replaceAllText": {
+                        "containsText": {
+                            "text":  placeholder_text,
+                            "matchCase": True
+                        },
+                        "replaceText": new_value,
+                        "pageObjectIds": pages
+                    }
+                }
+            ]
+        else:
+            raise Exception(
+                'The text from key {} is not a string'.format(placeholder_text)
+            )
+    return slides.execute_batch_update(requests, presentation_id)
+
+
+def copy_slide(page_id=None):
+    presentation_id = cfg['Gslides']['Presentationid'].get()
+
+    if page_id is None:
+        slideobj = slides.get_presentation_slides(presentation_id)
+        for object in slideobj:
+            page_id = object['objectId']
+            break
+
+    new_objectid = str(uuid.uuid4())
+    requests = [
+        {
+            "duplicateObject": {
+                "objectId": page_id,
+                "objectIds": {
+                    page_id: new_objectid,
+                }
+            }
+        }
+    ]
+
+    slides.execute_batch_update(requests, presentation_id)
+    return new_objectid
+
+
+def main():
+    for root, dirs, files in os.walk("config"):
+        for name in files:
+            cfg.set_file(os.path.join(root, name))
+            print("Processing: {}".format(os.path.join(root, name)))
+            # page_id = copy_slide()
+            text_replace = metrics_by_month()
+            # response = fill_metrics(text_replace, pages=[page_id])
+            # print(response)
+
+
+if __name__ == "__main__":
+    main()
