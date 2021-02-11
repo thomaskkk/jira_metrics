@@ -308,11 +308,12 @@ def metrics_by_month():
             "[thpqs]": str(getattr(tp, "Story", 0)),
             "[thpqt]": str(getattr(tp, "Task", 0)),
             "[thpqb]": str(getattr(tp, "Bug", 0)),
-            "[th_pq_tot]": "{} items".format(tp.Throughput),
+            "[th_pq_tot]": "{} items".format(getattr(tp, "Throughput", 0)),
             "[ctpqs]": "{}d".format(math.ceil(getattr(ct, "Story", 0))),
             "[ctpqt]": "{}d".format(math.ceil(getattr(ct, "Task", 0))),
             "[ctpqb]": "{}d".format(math.ceil(getattr(ct, "Bug", 0))),
-            "[ct_pq_tot]": "{}d (85%)".format(math.ceil(ct.Total)),
+            "[ct_pq_tot]": "{}d (85%)".format(
+                math.ceil(getattr(ct, "Total", 0))),
             "[mc_1_95]": "{} items (US only)".format(mc['Story'][95]),
             "[mc_1_85]": "{} items (US only)".format(mc['Story'][85]),
             "[mc_1_50]": "{} items (US only)".format(mc['Story'][50]),
@@ -368,11 +369,13 @@ def metrics_by_month():
     text_replace["[th1s]"] = str(getattr(tp, "Story", 0))
     text_replace["[th1t]"] = str(getattr(tp, "Task", 0))
     text_replace["[th1b]"] = str(getattr(tp, "Bug", 0))
-    text_replace["[th_1_tot]"] = "{} items".format(tp.Throughput)
-    text_replace["[ct1s]"] = "{}d".format(math.ceil(getattr(tp, "Bug", 0)))
-    text_replace["[ct1t]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
-    text_replace["[ct1b]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
-    text_replace["[ct_1_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
+    text_replace["[th_1_tot]"] = "{} items".format(
+        getattr(tp, "Throughput", 0))
+    text_replace["[ct1s]"] = "{}d".format(math.ceil(getattr(tp, "Story", 0)))
+    text_replace["[ct1t]"] = "{}d".format(math.ceil(getattr(ct, "Task", 0)))
+    text_replace["[ct1b]"] = "{}d".format(math.ceil(getattr(ct, "Bug", 0)))
+    text_replace["[ct_1_tot]"] = "{}d (85%)".format(
+        math.ceil(getattr(ct, "Total", 0)))
     text_replace["[mc_2_95]"] = "{} items (US only)".format(
         mc['Story'][95]
         )
@@ -396,11 +399,16 @@ def metrics_by_month():
         text_replace["[th2s]"] = str(getattr(tp, "Story", 0))
         text_replace["[th2t]"] = str(getattr(tp, "Task", 0))
         text_replace["[th2b]"] = str(getattr(tp, "Bug", 0))
-        text_replace["[th_2_tot]"] = "{} items".format(tp.Throughput)
-        text_replace["[ct2s]"] = "{}d".format(math.ceil(getattr(tp, "Bug", 0)))
-        text_replace["[ct2t]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
-        text_replace["[ct2b]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
-        text_replace["[ct_2_tot]"] = "{}d (85%)".format(math.ceil(ct.Total))
+        text_replace["[th_2_tot]"] = "{} items".format(
+            getattr(tp, "Throughput", 0))
+        text_replace["[ct2s]"] = "{}d".format(
+            math.ceil(getattr(tp, "Story", 0)))
+        text_replace["[ct2t]"] = "{}d".format(
+            math.ceil(getattr(ct, "Task", 0)))
+        text_replace["[ct2b]"] = "{}d".format(
+            math.ceil(getattr(ct, "Bug", 0)))
+        text_replace["[ct_2_tot]"] = "{}d (85%)".format(
+            math.ceil(getattr(ct, "Total", 0)))
         text_replace["[mc_3_95]"] = "{} items (US only)".format(
             mc['Story'][95]
             )
@@ -424,7 +432,8 @@ def metrics_by_month():
         text_replace["[th3s]"] = str(getattr(tp, "Story", 0))
         text_replace["[th3t]"] = str(getattr(tp, "Task", 0))
         text_replace["[th3b]"] = str(getattr(tp, "Bug", 0))
-        text_replace["[th_3_tot]"] = "{} items".format(tp.Throughput)
+        text_replace["[th_3_tot]"] = "{} items".format(
+            getattr(tp, "Throughput", 0))
         # text_replace["[thcqs]"] = ""
         # text_replace["[thcqt]"] = ""
         # text_replace["[thcqb]"] = ""
