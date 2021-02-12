@@ -113,7 +113,8 @@ def process_status_table(status_table, cfd_line):
                     item2['history_datetime'], item1['history_datetime'])
 
                 # lowercase cfg to match lowercase status keys
-                list_lower = {v.lower() for v in cfg['Cycletime'].get()}
+                list_lower = {
+                    v.lower() for v in cfg['Cycletime']['Status'].get()}
                 # add to cycletime if field set on config
                 if item1['from_status'] in list_lower:
                     cfd_line["cycletime"] += cfd_line[item1['from_status']]
@@ -172,7 +173,7 @@ def calc_cycletime_percentile(kanban_data, percentile=None):
         issuetype['Total'] = kanban_data.cycletime.quantile(percentile / 100)
         return issuetype
     else:
-        for cfg_percentile in cfg['Percentiles'].get():
+        for cfg_percentile in cfg['Cycletime']['Percentiles'].get():
             cycletime = kanban_data.groupby('issuetype').cycletime.quantile(
                 cfg_percentile / 100)
             cycletime['Total'] = kanban_data.cycletime.quantile(
@@ -263,7 +264,7 @@ def run_simulation(throughput, source, simul, simul_days):
     print(" - For {}:".format(source))
     mc_results = {}
     # Get nearest neighbor result
-    for percentil in cfg['Percentiles'].get():
+    for percentil in cfg['Montecarlo']['Percentiles'].get():
         result_index = distribution['Probability'].sub(percentil).abs()\
             .idxmin()
         mc_results[percentil] = distribution.loc[result_index, 'Items']
@@ -298,7 +299,9 @@ def metrics_by_month():
     current_month = dt.datetime.now().month
     months_after = (current_month - 1) % 3
     quarter = ((current_month - 1) // 3) + 1
-    jql_query = str(cfg['Gslides']['Query'])
+    jql_query = str(cfg['Query'])
+    simulations = cfg['Montecarlo']['Simulations'].get()
+    mc_sources = cfg['Montecarlo']['Source'].get()
 
     # Past quarter results and 1st month forecast
     kanban_data = gather_metrics_data(jql_query + jql_search_range(0))
@@ -306,8 +309,9 @@ def metrics_by_month():
     ct = ct.div(60).div(24)
     tp = calc_throughput(kanban_data)
     mc = simulate_montecarlo(
-        tp, sources=['Story'], simul=10000, simul_days=simul_days_range(0)
-        )
+        tp, sources=mc_sources,
+        simul=simulations,
+        simul_days=simul_days_range(0))
     tp = tp.sum(axis=0)
     text_replace = {
             "[s_squad_name]": cfg['Gslides']['Smallsquadname'].get(),
@@ -376,9 +380,9 @@ def metrics_by_month():
     ct = ct.div(60).div(24)
     mctp = calc_throughput(kanban_data)
     mc = simulate_montecarlo(
-        mctp, sources=['Story'], simul=10000, simul_days=simul_days_range(1)
-        )
-
+        mctp, sources=mc_sources,
+        simul=simulations,
+        simul_days=simul_days_range(1))
     tp_start, tp_end = throughput_range(1)
     tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
     tp = tp.sum(axis=0)
@@ -413,10 +417,9 @@ def metrics_by_month():
         ct = ct.div(60).div(24)
         mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
-            mctp, sources=['Story'],
-            simul=10000,
+            mctp, sources=mc_sources,
+            simul=simulations,
             simul_days=simul_days_range(2))
-
         tp_start, tp_end = throughput_range(2)
         tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
         tp = tp.sum(axis=0)
@@ -454,10 +457,9 @@ def metrics_by_month():
         ct = ct.div(60).div(24)
         mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
-            mctp, sources=['Story'],
-            simul=10000,
+            mctp, sources=mc_sources,
+            simul=simulations,
             simul_days=simul_days_range(3))
-
         tp_start, tp_end = throughput_range(3)
         tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
         tp = tp.sum(axis=0)
