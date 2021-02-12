@@ -193,9 +193,11 @@ def read_dates(dictio):
 def calc_throughput(kanban_data, start_date=None, end_date=None):
     """Change the pandas DF to a Troughput per day format"""
     if start_date is not None:
-        kanban_data = kanban_data[~(kanban_data['final_datetime'] <= start_date)]
+        kanban_data = kanban_data[~(
+            kanban_data['final_datetime'] <= start_date)]
     if end_date is not None:
-        kanban_data = kanban_data[~(kanban_data['final_datetime'] >= end_date)]
+        kanban_data = kanban_data[~(
+            kanban_data['final_datetime'] >= end_date)]
 
     # Reorganize DataFrame
     throughput = pd.crosstab(
@@ -361,6 +363,11 @@ def metrics_by_month():
             "[notes]": cfg['Gslides']['Notes'].get()
         }
 
+    thcqs = 0
+    thcqt = 0
+    thcqb = 0
+    th_cq_tot = 0
+
     # 1st month results and 2st month forecast
     kanban_data = gather_metrics_data(jql_query + jql_search_range(1))
     ct = calc_cycletime_percentile(kanban_data, 85)
@@ -374,10 +381,14 @@ def metrics_by_month():
     tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
     tp = tp.sum(axis=0)
     text_replace["[th1s]"] = str(getattr(tp, "Story", 0))
+    thcqs += int(getattr(tp, "Story", 0))
     text_replace["[th1t]"] = str(getattr(tp, "Task", 0))
+    thcqt += int(getattr(tp, "Task", 0))
     text_replace["[th1b]"] = str(getattr(tp, "Bug", 0))
+    thcqb += int(getattr(tp, "Bug", 0))
     text_replace["[th_1_tot]"] = "{} items".format(
         getattr(tp, "Throughput", 0))
+    th_cq_tot += int(getattr(tp, "Throughput", 0))
     text_replace["[ct1s]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
     text_replace["[ct1t]"] = "{}d".format(math.ceil(getattr(ct, "Task", 0)))
     text_replace["[ct1b]"] = "{}d".format(math.ceil(getattr(ct, "Bug", 0)))
@@ -400,17 +411,22 @@ def metrics_by_month():
         ct = ct.div(60).div(24)
         mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
-            mctp, sources=['Story'], simul=10000, simul_days=simul_days_range(2)
-            )
+            mctp, sources=['Story'],
+            simul=10000,
+            simul_days=simul_days_range(2))
 
         tp_start, tp_end = throughput_range(2)
         tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
         tp = tp.sum(axis=0)
         text_replace["[th2s]"] = str(getattr(tp, "Story", 0))
+        thcqs += int(getattr(tp, "Story", 0))
         text_replace["[th2t]"] = str(getattr(tp, "Task", 0))
+        thcqt += int(getattr(tp, "Task", 0))
         text_replace["[th2b]"] = str(getattr(tp, "Bug", 0))
+        thcqb += int(getattr(tp, "Bug", 0))
         text_replace["[th_2_tot]"] = "{} items".format(
             getattr(tp, "Throughput", 0))
+        th_cq_tot += int(getattr(tp, "Throughput", 0))
         text_replace["[ct2s]"] = "{}d".format(
             math.ceil(getattr(ct, "Story", 0)))
         text_replace["[ct2t]"] = "{}d".format(
@@ -436,24 +452,37 @@ def metrics_by_month():
         ct = ct.div(60).div(24)
         mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
-            mctp, sources=['Story'], simul=10000, simul_days=simul_days_range(3)
-            )
+            mctp, sources=['Story'],
+            simul=10000,
+            simul_days=simul_days_range(3))
 
         tp_start, tp_end = throughput_range(3)
         tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
         tp = tp.sum(axis=0)
         text_replace["[th3s]"] = str(getattr(tp, "Story", 0))
+        thcqs += int(getattr(tp, "Story", 0))
         text_replace["[th3t]"] = str(getattr(tp, "Task", 0))
+        thcqt += int(getattr(tp, "Task", 0))
         text_replace["[th3b]"] = str(getattr(tp, "Bug", 0))
+        thcqb += int(getattr(tp, "Bug", 0))
         text_replace["[th_3_tot]"] = "{} items".format(
             getattr(tp, "Throughput", 0))
-        # text_replace["[thcqs]"] = ""
-        # text_replace["[thcqt]"] = ""
-        # text_replace["[thcqb]"] = ""
-        # text_replace["[th_cq_tot]"] = ""
-        # text_replace["[mc_nq_95]"] = ""
-        # text_replace["[mc_nq_85]"] = ""
-        # text_replace["[mc_nq_50]"] = ""
+        th_cq_tot += int(getattr(tp, "Throughput", 0))
+        text_replace["[mc_nq_95]"] = "{} items (US only)".format(
+            mc['Story'][95]
+            )
+        text_replace["[mc_nq_85]"] = "{} items (US only)".format(
+            mc['Story'][85]
+            )
+        text_replace["[mc_nq_50]"] = "{} items (US only)".format(
+            mc['Story'][50]
+            )
+
+    # Fill quarter totals
+    text_replace["[thcqs]"] = str(thcqs)
+    text_replace["[thcqt]"] = str(thcqt)
+    text_replace["[thcqb]"] = str(thcqb)
+    text_replace["[th_cq_tot]"] = "{} items".format(str(th_cq_tot))
 
     return text_replace
 
@@ -495,8 +524,11 @@ def simul_days_range(metrics_month):
 
     today = dt.date.today()
     months_to_past_quarter = ((today.month - 1) % 3)
-    start_month = (metrics_month - months_to_past_quarter) - 1
+    start_month = ((metrics_month + 1) - months_to_past_quarter) - 1
     months_to_next_quarter = 2 - (today.month - 1) % 3
+    # If asked to forecast next quarter we should add 3 months
+    if metrics_month == 3:
+        months_to_next_quarter += 3
 
     start_date = today + relativedelta(day=1, months=start_month)
     end_date = today + relativedelta(day=31, months=months_to_next_quarter)
