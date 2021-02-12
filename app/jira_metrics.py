@@ -187,6 +187,8 @@ def read_dates(dictio):
     kanban_data.final_datetime = pd.to_datetime(
         kanban_data.final_datetime, unit='s'
     ).dt.date
+    # Remove items with cycletime == 0
+    kanban_data = kanban_data[kanban_data.cycletime != 0]
     return kanban_data
 
 
