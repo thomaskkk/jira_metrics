@@ -46,7 +46,6 @@ def jql_search(jira_obj, jql_query=None):
         maxResults=99999,
         expand='changelog'
     )
-    print(jql_query)
     return issues
 
 
@@ -191,9 +190,14 @@ def read_dates(dictio):
     return kanban_data
 
 
-def calc_throughput(kanban_data):
+def calc_throughput(kanban_data, start_date=None, end_date=None):
     """Change the pandas DF to a Troughput per day format"""
-    # Calculate Throughput
+    if start_date is not None:
+        kanban_data = kanban_data[~(kanban_data['final_datetime'] <= start_date)]
+    if end_date is not None:
+        kanban_data = kanban_data[~(kanban_data['final_datetime'] >= end_date)]
+
+    # Reorganize DataFrame
     throughput = pd.crosstab(
         kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]
     ).reset_index()
@@ -361,17 +365,20 @@ def metrics_by_month():
     kanban_data = gather_metrics_data(jql_query + jql_search_range(1))
     ct = calc_cycletime_percentile(kanban_data, 85)
     ct = ct.div(60).div(24)
-    tp = calc_throughput(kanban_data)
+    mctp = calc_throughput(kanban_data)
     mc = simulate_montecarlo(
-        tp, sources=['Story'], simul=10000, simul_days=simul_days_range(1)
+        mctp, sources=['Story'], simul=10000, simul_days=simul_days_range(1)
         )
+
+    tp_start, tp_end = throughput_range(1)
+    tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
     tp = tp.sum(axis=0)
     text_replace["[th1s]"] = str(getattr(tp, "Story", 0))
     text_replace["[th1t]"] = str(getattr(tp, "Task", 0))
     text_replace["[th1b]"] = str(getattr(tp, "Bug", 0))
     text_replace["[th_1_tot]"] = "{} items".format(
         getattr(tp, "Throughput", 0))
-    text_replace["[ct1s]"] = "{}d".format(math.ceil(getattr(tp, "Story", 0)))
+    text_replace["[ct1s]"] = "{}d".format(math.ceil(getattr(ct, "Story", 0)))
     text_replace["[ct1t]"] = "{}d".format(math.ceil(getattr(ct, "Task", 0)))
     text_replace["[ct1b]"] = "{}d".format(math.ceil(getattr(ct, "Bug", 0)))
     text_replace["[ct_1_tot]"] = "{}d (85%)".format(
@@ -391,10 +398,13 @@ def metrics_by_month():
         kanban_data = gather_metrics_data(jql_query + jql_search_range(2))
         ct = calc_cycletime_percentile(kanban_data, 85)
         ct = ct.div(60).div(24)
-        tp = calc_throughput(kanban_data)
+        mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
-            tp, sources=['Story'], simul=10000, simul_days=simul_days_range(2)
+            mctp, sources=['Story'], simul=10000, simul_days=simul_days_range(2)
             )
+
+        tp_start, tp_end = throughput_range(2)
+        tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
         tp = tp.sum(axis=0)
         text_replace["[th2s]"] = str(getattr(tp, "Story", 0))
         text_replace["[th2t]"] = str(getattr(tp, "Task", 0))
@@ -402,7 +412,7 @@ def metrics_by_month():
         text_replace["[th_2_tot]"] = "{} items".format(
             getattr(tp, "Throughput", 0))
         text_replace["[ct2s]"] = "{}d".format(
-            math.ceil(getattr(tp, "Story", 0)))
+            math.ceil(getattr(ct, "Story", 0)))
         text_replace["[ct2t]"] = "{}d".format(
             math.ceil(getattr(ct, "Task", 0)))
         text_replace["[ct2b]"] = "{}d".format(
@@ -424,10 +434,13 @@ def metrics_by_month():
         kanban_data = gather_metrics_data(jql_query + jql_search_range(3))
         ct = calc_cycletime_percentile(kanban_data, 85)
         ct = ct.div(60).div(24)
-        tp = calc_throughput(kanban_data)
+        mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
-            tp, sources=['Story'], simul=10000, simul_days=simul_days_range(3)
+            mctp, sources=['Story'], simul=10000, simul_days=simul_days_range(3)
             )
+
+        tp_start, tp_end = throughput_range(3)
+        tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
         tp = tp.sum(axis=0)
         text_replace["[th3s]"] = str(getattr(tp, "Story", 0))
         text_replace["[th3t]"] = str(getattr(tp, "Task", 0))
@@ -451,7 +464,7 @@ def jql_search_range(metrics_month):
 
     today = dt.date.today()
     months_to_past_quarter = ((today.month - 1) % 3)
-    start_month = (metrics_month-months_to_past_quarter) - 3
+    start_month = (metrics_month - months_to_past_quarter) - 3
     end_month = (metrics_month - months_to_past_quarter) - 1
 
     start_date = today + relativedelta(day=1, months=start_month)
@@ -460,6 +473,20 @@ def jql_search_range(metrics_month):
     return 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(
         start_date, end_date
         )
+
+
+def throughput_range(metrics_month):
+    """Return two objects with date range of the current metrics month"""
+
+    today = dt.date.today()
+    months_to_past_quarter = ((today.month - 1) % 3)
+    start_month = (metrics_month - months_to_past_quarter) - 1
+    end_month = (metrics_month - months_to_past_quarter) - 1
+
+    start_date = today + relativedelta(day=1, months=start_month)
+    end_date = today + relativedelta(day=31, months=end_month)
+
+    return start_date, end_date
 
 
 def simul_days_range(metrics_month):
@@ -534,10 +561,10 @@ def main():
         for name in files:
             cfg.set_file(os.path.join(root, name))
             print("Processing: {}".format(os.path.join(root, name)))
-            # page_id = copy_slide()
             text_replace = metrics_by_month()
-            # response = fill_metrics(text_replace, pages=[page_id])
-            # print(response)
+            page_id = copy_slide()
+            response = fill_metrics(text_replace, pages=[page_id])
+            print(response)
 
 
 if __name__ == "__main__":
