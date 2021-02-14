@@ -132,7 +132,8 @@ def group_issuetype(issuetype):
         else:
             if value1 == issuetype:
                 return key1
-    raise Exception("Can't find issue in config file: {}".format(issuetype))
+    raise Exception(
+        "Can't find issuetype in config file: {}".format(issuetype))
 
 
 def group_status(status):
@@ -146,7 +147,8 @@ def group_status(status):
             if value1.lower() == status.lower():
                 return key1.lower()
 
-    raise Exception("Can't find status in config file: {}".format(status))
+    raise Exception(
+        "Can't find status in config file: {}".format(status))
 
 
 def calc_diff_date_to_unix(start_datetime, end_datetime):
@@ -167,62 +169,67 @@ def convert_jira_datetime(datetime_str):
 
 def calc_cycletime_percentile(kanban_data, percentile=None):
     """Calculate cycletime percentiles on cfg with all dict entries"""
-    if percentile is not None:
-        issuetype = kanban_data.groupby('issuetype').cycletime.quantile(
-            percentile / 100)
-        issuetype['Total'] = kanban_data.cycletime.quantile(percentile / 100)
-        return issuetype
-    else:
-        for cfg_percentile in cfg['Cycletime']['Percentiles'].get():
-            cycletime = kanban_data.groupby('issuetype').cycletime.quantile(
-                cfg_percentile / 100)
-            cycletime['Total'] = kanban_data.cycletime.quantile(
-                cfg_percentile / 100)
-            cycletime = cycletime.div(60).div(24)
-            print("Cycletime {}% (in days):".format(cfg_percentile))
-            print(cycletime)
+    if kanban_data.empty is False:
+        if percentile is not None:
+            issuetype = kanban_data.groupby('issuetype').cycletime.quantile(
+                percentile / 100)
+            issuetype['Total'] = kanban_data.cycletime.quantile(
+                percentile / 100)
+            issuetype.div(60).div(24)
+            return issuetype
+        else:
+            for cfg_percentile in cfg['Cycletime']['Percentiles'].get():
+                cycletime = kanban_data.groupby(
+                    'issuetype').cycletime.quantile(
+                    cfg_percentile / 100)
+                cycletime['Total'] = kanban_data.cycletime.quantile(
+                    cfg_percentile / 100)
+                cycletime = cycletime.div(60).div(24)
 
 
 def read_dates(dictio):
     kanban_data = pd.DataFrame.from_dict(dictio)
-    kanban_data.final_datetime = pd.to_datetime(
-        kanban_data.final_datetime, unit='s'
-    ).dt.date
-    # Remove items with cycletime == 0
-    kanban_data = kanban_data[kanban_data.cycletime != 0]
+    if kanban_data.empty is False:
+        kanban_data.final_datetime = pd.to_datetime(
+            kanban_data.final_datetime, unit='s'
+        ).dt.date
+        # Remove items with cycletime == 0
+        kanban_data = kanban_data[kanban_data.cycletime != 0]
     return kanban_data
 
 
 def calc_throughput(kanban_data, start_date=None, end_date=None):
     """Change the pandas DF to a Troughput per day format"""
-    if start_date is not None:
+    if start_date is not None and 'final_datetime' in kanban_data.columns:
         kanban_data = kanban_data[~(
             kanban_data['final_datetime'] <= start_date)]
-    if end_date is not None:
+    if end_date is not None and 'final_datetime' in kanban_data.columns:
         kanban_data = kanban_data[~(
             kanban_data['final_datetime'] >= end_date)]
 
-    # Reorganize DataFrame
-    throughput = pd.crosstab(
-        kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]
-    ).reset_index()
-    # Sum Throughput per day
-    throughput['Throughput'] = 0
-    if 'Story' in throughput:
-        throughput['Throughput'] += throughput.Story
-    if 'Bug' in throughput:
-        throughput['Throughput'] += throughput.Bug
-    if 'Task' in throughput:
-        throughput['Throughput'] += throughput.Task
+    if kanban_data.empty is False:
+        # Reorganize DataFrame
+        throughput = pd.crosstab(
+            kanban_data.final_datetime, kanban_data.issuetype, colnames=[None]
+        ).reset_index()
+        # Sum Throughput per day
+        throughput['Throughput'] = 0
+        if 'Story' in throughput:
+            throughput['Throughput'] += throughput.Story
+        if 'Bug' in throughput:
+            throughput['Throughput'] += throughput.Bug
+        if 'Task' in throughput:
+            throughput['Throughput'] += throughput.Task
 
-    date_range = pd.date_range(
-        start=throughput.final_datetime.min(),
-        end=throughput.final_datetime.max()
-    )
-    throughput = throughput.set_index(
-        'final_datetime'
-    ).reindex(date_range).fillna(0).astype(int).rename_axis('Date')
-    return throughput
+        if throughput.empty is False:
+            date_range = pd.date_range(
+                start=throughput.final_datetime.min(),
+                end=throughput.final_datetime.max()
+            )
+            throughput = throughput.set_index(
+                'final_datetime'
+            ).reindex(date_range).fillna(0).astype(int).rename_axis('Date')
+        return throughput
 
 
 def simulate_montecarlo(throughput, sources=None, simul=None, simul_days=None):
@@ -245,39 +252,33 @@ def run_simulation(throughput, source, simul, simul_days):
     """Run monte carlo simulation with the result of how many itens will
     be delivered in a set of days """
 
-    dataset = throughput[[source]].reset_index(drop=True)
+    if throughput is not None and source in throughput.columns:
+        dataset = throughput[[source]].reset_index(drop=True)
 
-    samples = [getattr(dataset.sample(
-        n=simul_days, replace=True
-    ).sum(), source) for i in range(simul)]
+        samples = [getattr(dataset.sample(
+            n=simul_days, replace=True
+        ).sum(), source) for i in range(simul)]
 
-    samples = pd.DataFrame(samples, columns=['Items'])
+        samples = pd.DataFrame(samples, columns=['Items'])
 
-    distribution = samples.groupby(['Items']).size().reset_index(
-        name='Frequency'
-    )
-    distribution = distribution.sort_index(ascending=False)
-    distribution['Probability'] = (
-            100*distribution.Frequency.cumsum()
-        ) / distribution.Frequency.sum()
-
-    print(" - For {}:".format(source))
-    mc_results = {}
-    # Get nearest neighbor result
-    for percentil in cfg['Montecarlo']['Percentiles'].get():
-        result_index = distribution['Probability'].sub(percentil).abs()\
-            .idxmin()
-        mc_results[percentil] = distribution.loc[result_index, 'Items']
-        print(
-            "For {}% -> Items: {} ({}%)"
-            .format(
-                str(percentil),
-                distribution.loc[result_index, 'Items'],
-                distribution.loc[result_index, 'Probability']
-            )
+        distribution = samples.groupby(['Items']).size().reset_index(
+            name='Frequency'
         )
+        distribution = distribution.sort_index(ascending=False)
+        distribution['Probability'] = (
+                100*distribution.Frequency.cumsum()
+            ) / distribution.Frequency.sum()
 
-    return mc_results
+        mc_results = {}
+        # Get nearest neighbor result
+        for percentil in cfg['Montecarlo']['Percentiles'].get():
+            result_index = distribution['Probability'].sub(percentil).abs()\
+                .idxmin()
+            mc_results[percentil] = distribution.loc[result_index, 'Items']
+
+        return mc_results
+    else:
+        return None
 
 
 def calc_simul_days():
@@ -306,13 +307,13 @@ def metrics_by_month():
     # Past quarter results and 1st month forecast
     kanban_data = gather_metrics_data(jql_query + jql_search_range(0))
     ct = calc_cycletime_percentile(kanban_data, 85)
-    ct = ct.div(60).div(24)
     tp = calc_throughput(kanban_data)
     mc = simulate_montecarlo(
         tp, sources=mc_sources,
         simul=simulations,
         simul_days=simul_days_range(0))
-    tp = tp.sum(axis=0)
+    if tp is not None:
+        tp = tp.sum(axis=0)
     text_replace = {
             "[s_squad_name]": cfg['Gslides']['Smallsquadname'].get(),
             "[squad_name]": cfg['Gslides']['Squadname'].get(),
@@ -326,9 +327,12 @@ def metrics_by_month():
             "[ctpqb]": "{}d".format(math.ceil(getattr(ct, "Bug", 0))),
             "[ct_pq_tot]": "{}d (85%)".format(
                 math.ceil(getattr(ct, "Total", 0))),
-            "[mc_1_95]": "{} items (US only)".format(mc['Story'][95]),
-            "[mc_1_85]": "{} items (US only)".format(mc['Story'][85]),
-            "[mc_1_50]": "{} items (US only)".format(mc['Story'][50]),
+            "[mc_1_95]": "{} items (US only)".format(
+                get_dict_value(mc, 'Story', 95, 0)),
+            "[mc_1_85]": "{} items (US only)".format(
+                get_dict_value(mc, 'Story', 85, 0)),
+            "[mc_1_50]": "{} items (US only)".format(
+                get_dict_value(mc, 'Story', 50, 0)),
             "[th1s]": "",
             "[th1t]": "",
             "[th1b]": "",
@@ -377,7 +381,6 @@ def metrics_by_month():
     # 1st month results and 2st month forecast
     kanban_data = gather_metrics_data(jql_query + jql_search_range(1))
     ct = calc_cycletime_percentile(kanban_data, 85)
-    ct = ct.div(60).div(24)
     mctp = calc_throughput(kanban_data)
     mc = simulate_montecarlo(
         mctp, sources=mc_sources,
@@ -385,7 +388,8 @@ def metrics_by_month():
         simul_days=simul_days_range(1))
     tp_start, tp_end = throughput_range(1)
     tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
-    tp = tp.sum(axis=0)
+    if tp is not None:
+        tp = tp.sum(axis=0)
     text_replace["[th1s]"] = str(getattr(tp, "Story", 0))
     thcqs += int(getattr(tp, "Story", 0))
     text_replace["[th1t]"] = str(getattr(tp, "Task", 0))
@@ -401,20 +405,19 @@ def metrics_by_month():
     text_replace["[ct_1_tot]"] = "{}d (85%)".format(
         math.ceil(getattr(ct, "Total", 0)))
     text_replace["[mc_2_95]"] = "{} items (US only)".format(
-        mc['Story'][95]
+        get_dict_value(mc, 'Story', 95, 0)
         )
     text_replace["[mc_2_85]"] = "{} items (US only)".format(
-        mc['Story'][85]
+       get_dict_value(mc, 'Story', 85, 0)
         )
     text_replace["[mc_2_50]"] = "{} items (US only)".format(
-        mc['Story'][50]
+        get_dict_value(mc, 'Story', 50, 0)
         )
 
     if months_after >= 1:
         # 2nd month results and 3rd month forecast
         kanban_data = gather_metrics_data(jql_query + jql_search_range(2))
         ct = calc_cycletime_percentile(kanban_data, 85)
-        ct = ct.div(60).div(24)
         mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
             mctp, sources=mc_sources,
@@ -422,7 +425,8 @@ def metrics_by_month():
             simul_days=simul_days_range(2))
         tp_start, tp_end = throughput_range(2)
         tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
-        tp = tp.sum(axis=0)
+        if tp is not None:
+            tp = tp.sum(axis=0)
         text_replace["[th2s]"] = str(getattr(tp, "Story", 0))
         thcqs += int(getattr(tp, "Story", 0))
         text_replace["[th2t]"] = str(getattr(tp, "Task", 0))
@@ -441,20 +445,19 @@ def metrics_by_month():
         text_replace["[ct_2_tot]"] = "{}d (85%)".format(
             math.ceil(getattr(ct, "Total", 0)))
         text_replace["[mc_3_95]"] = "{} items (US only)".format(
-            mc['Story'][95]
+            get_dict_value(mc, 'Story', 95, 0)
             )
         text_replace["[mc_3_85]"] = "{} items (US only)".format(
-            mc['Story'][85]
+           get_dict_value(mc, 'Story', 85, 0)
             )
         text_replace["[mc_3_50]"] = "{} items (US only)".format(
-            mc['Story'][50]
+            get_dict_value(mc, 'Story', 50, 0)
             )
 
     if months_after >= 2:
         # 3rd month results, quarter totals and next forecast
         kanban_data = gather_metrics_data(jql_query + jql_search_range(3))
         ct = calc_cycletime_percentile(kanban_data, 85)
-        ct = ct.div(60).div(24)
         mctp = calc_throughput(kanban_data)
         mc = simulate_montecarlo(
             mctp, sources=mc_sources,
@@ -462,7 +465,8 @@ def metrics_by_month():
             simul_days=simul_days_range(3))
         tp_start, tp_end = throughput_range(3)
         tp = calc_throughput(kanban_data, start_date=tp_start, end_date=tp_end)
-        tp = tp.sum(axis=0)
+        if tp is not None:
+            tp = tp.sum(axis=0)
         text_replace["[th3s]"] = str(getattr(tp, "Story", 0))
         thcqs += int(getattr(tp, "Story", 0))
         text_replace["[th3t]"] = str(getattr(tp, "Task", 0))
@@ -473,13 +477,13 @@ def metrics_by_month():
             getattr(tp, "Throughput", 0))
         th_cq_tot += int(getattr(tp, "Throughput", 0))
         text_replace["[mc_nq_95]"] = "{} items (US only)".format(
-            mc['Story'][95]
+            get_dict_value(mc, 'Story', 95, 0)
             )
         text_replace["[mc_nq_85]"] = "{} items (US only)".format(
-            mc['Story'][85]
+           get_dict_value(mc, 'Story', 85, 0)
             )
         text_replace["[mc_nq_50]"] = "{} items (US only)".format(
-            mc['Story'][50]
+            get_dict_value(mc, 'Story', 50, 0)
             )
 
     # Fill quarter totals
@@ -489,6 +493,13 @@ def metrics_by_month():
     text_replace["[th_cq_tot]"] = "{} items".format(str(th_cq_tot))
 
     return text_replace
+
+
+def get_dict_value(dict, key1, key2, default=None):
+    if bool(dict):
+        return default
+    else:
+        return dict[key1][key2]
 
 
 def jql_search_range(metrics_month):
@@ -599,8 +610,7 @@ def main():
             print("Processing: {}".format(os.path.join(root, name)))
             text_replace = metrics_by_month()
             page_id = copy_slide()
-            response = fill_metrics(text_replace, pages=[page_id])
-            print(response)
+            fill_metrics(text_replace, pages=[page_id])
 
 
 if __name__ == "__main__":
