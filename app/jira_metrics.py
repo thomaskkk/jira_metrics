@@ -175,8 +175,7 @@ def calc_cycletime_percentile(kanban_data, percentile=None):
                 percentile / 100)
             issuetype['Total'] = kanban_data.cycletime.quantile(
                 percentile / 100)
-            issuetype.div(60).div(24)
-            return issuetype
+            return issuetype.div(60).div(24)
         else:
             for cfg_percentile in cfg['Cycletime']['Percentiles'].get():
                 cycletime = kanban_data.groupby(
@@ -496,7 +495,7 @@ def metrics_by_month():
 
 
 def get_dict_value(dict, key1, key2, default=None):
-    if bool(dict):
+    if not dict or dict[key1] is None or dict[key1][key2] is None:
         return default
     else:
         return dict[key1][key2]
