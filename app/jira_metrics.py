@@ -112,13 +112,6 @@ def process_status_table(status_table, cfd_line):
                 cfd_line[item1['from_status']] += calc_diff_date_to_unix(
                     item2['history_datetime'], item1['history_datetime'])
 
-                # lowercase cfg to match lowercase status keys
-                list_lower = {
-                    v.lower() for v in cfg['Cycletime']['Status'].get()}
-                # add to cycletime if field set on config
-                if item1['from_status'] in list_lower:
-                    cfd_line["cycletime"] += cfd_line[item1['from_status']]
-
     return cfd_line
 
 
@@ -167,6 +160,20 @@ def convert_jira_datetime(datetime_str):
     return dt.datetime.timestamp(time)
 
 
+def read_dates(dictio):
+    kanban_data = pd.DataFrame.from_dict(dictio)
+    if kanban_data.empty is False:
+        kanban_data.final_datetime = pd.to_datetime(
+            kanban_data.final_datetime, unit='s'
+        ).dt.date
+        # Calculate each issue cycletime
+        status_list_lower = [v.lower() for v in cfg['Cycletime']['Status'].get()]
+        kanban_data.cycletime = kanban_data[status_list_lower].sum(axis=1)
+        # Remove items with cycletime == 0
+        kanban_data = kanban_data[kanban_data.cycletime != 0]
+    return kanban_data
+
+
 def calc_cycletime_percentile(kanban_data, percentile=None):
     """Calculate cycletime percentiles on cfg with all dict entries"""
     if kanban_data.empty is False:
@@ -184,17 +191,6 @@ def calc_cycletime_percentile(kanban_data, percentile=None):
                 cycletime['Total'] = kanban_data.cycletime.quantile(
                     cfg_percentile / 100)
                 cycletime = cycletime.div(60).div(24)
-
-
-def read_dates(dictio):
-    kanban_data = pd.DataFrame.from_dict(dictio)
-    if kanban_data.empty is False:
-        kanban_data.final_datetime = pd.to_datetime(
-            kanban_data.final_datetime, unit='s'
-        ).dt.date
-        # Remove items with cycletime == 0
-        kanban_data = kanban_data[kanban_data.cycletime != 0]
-    return kanban_data
 
 
 def calc_throughput(kanban_data, start_date=None, end_date=None):
@@ -219,7 +215,6 @@ def calc_throughput(kanban_data, start_date=None, end_date=None):
             throughput['Throughput'] += throughput.Bug
         if 'Task' in throughput:
             throughput['Throughput'] += throughput.Task
-
         if throughput.empty is False:
             date_range = pd.date_range(
                 start=throughput.final_datetime.min(),
@@ -228,11 +223,29 @@ def calc_throughput(kanban_data, start_date=None, end_date=None):
             throughput = throughput.set_index(
                 'final_datetime'
             ).reindex(date_range).fillna(0).astype(int).rename_axis('Date')
+
+        # Fill all missing dates
+        date_range = pd.date_range(start_date, end_date)
+        throughput = throughput.reindex(date_range, fill_value=0)
+
         return throughput
 
 
 def simulate_montecarlo(throughput, sources=None, simul=None, simul_days=None):
-
+    """
+    Simulate Monte Carlo
+    
+    Parameters
+    ----------
+        throughput : dataFrame
+            throughput base values of the simulation
+        sources : dictionary
+            sources that the simulations should run on
+        simul : integer
+            number of simulations
+        simul_days : integer
+            days to run the simulation
+    """
     if sources is None:
         sources = cfg['Montecarlo']['Source'].get()
     if simul is None:
@@ -243,7 +256,6 @@ def simulate_montecarlo(throughput, sources=None, simul=None, simul_days=None):
     mc = {}
     for source in sources:
         mc[source] = run_simulation(throughput, source, simul, simul_days)
-
     return mc
 
 
@@ -251,7 +263,8 @@ def run_simulation(throughput, source, simul, simul_days):
     """Run monte carlo simulation with the result of how many itens will
     be delivered in a set of days """
 
-    if (throughput is not None and source in throughput.columns) and len(throughput) > 1:
+    if (throughput is not None and source in throughput.columns):
+        
         dataset = throughput[[source]].reset_index(drop=True)
 
         samples = [getattr(dataset.sample(
@@ -304,9 +317,10 @@ def metrics_by_month():
     mc_sources = cfg['Montecarlo']['Source'].get()
 
     # Past quarter results and 1st month forecast
-    kanban_data = gather_metrics_data(jql_query + jql_search_range(0))
+    start_date, end_date = jql_search_range(0)
+    kanban_data = gather_metrics_data(jql_query + 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(start_date, end_date))
     ct = calc_cycletime_percentile(kanban_data, 85)
-    tp = calc_throughput(kanban_data)
+    tp = calc_throughput(kanban_data, start_date, end_date)
     mc = simulate_montecarlo(
         tp, sources=mc_sources,
         simul=simulations,
@@ -369,7 +383,7 @@ def metrics_by_month():
             "[mc_nq_95]": "",
             "[mc_nq_85]": "",
             "[mc_nq_50]": "",
-            "[notes]": cfg['Gslides']['Notes'].get()
+            "[notes]": cfg['Gslides']['Notes'].get() + " - Extraído em {}".format(dt.date.today())
         }
 
     thcqs = 0
@@ -378,9 +392,10 @@ def metrics_by_month():
     th_cq_tot = 0
 
     # 1st month results and 2st month forecast
-    kanban_data = gather_metrics_data(jql_query + jql_search_range(1))
+    start_date, end_date = jql_search_range(1)
+    kanban_data = gather_metrics_data(jql_query + 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(start_date, end_date))
     ct = calc_cycletime_percentile(kanban_data, 85)
-    mctp = calc_throughput(kanban_data)
+    mctp = calc_throughput(kanban_data, start_date, end_date)
     mc = simulate_montecarlo(
         mctp, sources=mc_sources,
         simul=simulations,
@@ -415,9 +430,10 @@ def metrics_by_month():
 
     if months_after >= 1:
         # 2nd month results and 3rd month forecast
-        kanban_data = gather_metrics_data(jql_query + jql_search_range(2))
+        start_date, end_date = jql_search_range(2)
+        kanban_data = gather_metrics_data(jql_query + 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(start_date, end_date))
         ct = calc_cycletime_percentile(kanban_data, 85)
-        mctp = calc_throughput(kanban_data)
+        mctp = calc_throughput(kanban_data, start_date, end_date)
         mc = simulate_montecarlo(
             mctp, sources=mc_sources,
             simul=simulations,
@@ -455,9 +471,10 @@ def metrics_by_month():
 
     if months_after >= 2:
         # 3rd month results, quarter totals and next forecast
-        kanban_data = gather_metrics_data(jql_query + jql_search_range(3))
+        start_date, end_date = jql_search_range(3)
+        kanban_data = gather_metrics_data(jql_query + 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(start_date, end_date))
         ct = calc_cycletime_percentile(kanban_data, 85)
-        mctp = calc_throughput(kanban_data)
+        mctp = calc_throughput(kanban_data, start_date, end_date)
         mc = simulate_montecarlo(
             mctp, sources=mc_sources,
             simul=simulations,
@@ -475,6 +492,14 @@ def metrics_by_month():
         text_replace["[th_3_tot]"] = "{} items".format(
             getattr(tp, "Throughput", 0))
         th_cq_tot += int(getattr(tp, "Throughput", 0))
+        text_replace["[ct3s]"] = "{}d".format(
+            math.ceil(getattr(ct, "Story", 0)))
+        text_replace["[ct3t]"] = "{}d".format(
+            math.ceil(getattr(ct, "Task", 0)))
+        text_replace["[ct3b]"] = "{}d".format(
+            math.ceil(getattr(ct, "Bug", 0)))
+        text_replace["[ct_3_tot]"] = "{}d (85%)".format(
+            math.ceil(getattr(ct, "Total", 0)))
         text_replace["[mc_nq_95]"] = "{} items (US only)".format(
             get_dict_value(mc, 'Story', 95, 0)
             )
@@ -502,8 +527,8 @@ def get_dict_value(dict, key1, key2, default=None):
 
 
 def jql_search_range(metrics_month):
-    """Return the jql string starting from the 1st day 3 months back
-    and ending in the 1st of the current month"""
+    """Return a tupple with 2 dates, start_date from the 1st day 3 months back
+    and end_date in the 1st of the current month"""
 
     today = dt.date.today()
     months_to_past_quarter = ((today.month - 1) % 3)
@@ -513,9 +538,7 @@ def jql_search_range(metrics_month):
     start_date = today + relativedelta(day=1, months=start_month)
     end_date = today + relativedelta(day=31, months=end_month)
 
-    return 'AND resolutiondate >= "{}" AND resolutiondate <= "{}"'.format(
-        start_date, end_date
-        )
+    return start_date, end_date
 
 
 def throughput_range(metrics_month):
