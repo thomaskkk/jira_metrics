@@ -251,7 +251,7 @@ def run_simulation(throughput, source, simul, simul_days):
     """Run monte carlo simulation with the result of how many itens will
     be delivered in a set of days """
 
-    if throughput is not None and source in throughput.columns:
+    if (throughput is not None and source in throughput.columns) and len(throughput) > 1:
         dataset = throughput[[source]].reset_index(drop=True)
 
         samples = [getattr(dataset.sample(
