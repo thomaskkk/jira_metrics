@@ -207,11 +207,10 @@ def calc_throughput(kanban_data, start_date=None, end_date=None):
     """Change the pandas DF to a Troughput per day format"""
     if start_date is not None and 'final_datetime' in kanban_data.columns:
         kanban_data = kanban_data[~(
-            kanban_data['final_datetime'] <= start_date)]
+            kanban_data['final_datetime'] < start_date)]
     if end_date is not None and 'final_datetime' in kanban_data.columns:
         kanban_data = kanban_data[~(
-            kanban_data['final_datetime'] >= end_date)]
-
+            kanban_data['final_datetime'] > end_date)]
     if kanban_data.empty is False:
         # Reorganize DataFrame
         throughput = pd.crosstab(
@@ -237,7 +236,6 @@ def calc_throughput(kanban_data, start_date=None, end_date=None):
         # Fill all missing dates
         date_range = pd.date_range(start_date, end_date)
         throughput = throughput.reindex(date_range, fill_value=0)
-
         return throughput
 
 
