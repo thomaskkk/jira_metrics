@@ -12,7 +12,8 @@ import GoogleApiSupport.slides as slides
 
 
 cfg = confuse.Configuration('JiraMetrics', __name__)
-cfg.set_file('config_test.yml')
+if os.path.isfile('config_test.yml'):
+    cfg.set_file('config_test.yml')
 
 
 def atlassian_auth(override_config_filename=None):
