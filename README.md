@@ -21,6 +21,7 @@ Before run the script you'll need:
 * Select "Service account" and give the account a name (Ex.: sevice_name@project_name.iam.gserviceaccount.com)
 * Go to your newly created service account and click on ADD KEY -> Create new key -> JSON -> Create
 * Your browser will download a Json, change the filename to "service_credentials.json"and add to a hidden directory called ".credentials/" on your HOME
+* Go to your google slide template and add the email "Service account" (Ex.: sevice_name@project_name.iam.gserviceaccount.com) as one of the editors of your document
 
 ## Config files
 Check the file config_example.yml you need a config file in the /config folder for each team/squad/slide that you want to extract metrics from.
