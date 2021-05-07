@@ -32,9 +32,9 @@ You should run on Python 3.7, to check your python version:
 ```shell
 python3 --version
 ```
-Make sure you had the requirementes.txt installed (Docker container is comming soon):
+Make sure you had the requirements.txt installed (Docker container is comming soon):
 ```shell
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 You can run the script with the command:
 ```shell

@@ -12,8 +12,6 @@ import GoogleApiSupport.slides as slides
 
 
 cfg = confuse.Configuration('JiraMetrics', __name__)
-if os.path.isfile('config_test.yml'):
-    cfg.set_file('config_test.yml')
 
 
 def atlassian_auth(override_config_filename=None):
@@ -644,13 +642,18 @@ def copy_slide(page_id=None):
 
 
 def main():
-    for root, dirs, files in os.walk("config"):
-        for name in files:
-            cfg.set_file(os.path.join(root, name))
-            print("Processing: {}".format(os.path.join(root, name)))
-            text_replace = metrics_by_month()
-            page_id = copy_slide()
-            fill_metrics(text_replace, pages=[page_id])
+    if os.path.exists("config"):
+        for root, dirs, files in os.walk("config"):
+            for name in files:
+                cfg.set_file(os.path.join(root, name))
+                print("Processing: {}".format(os.path.join(root, name)))
+                text_replace = metrics_by_month()
+                page_id = copy_slide()
+                fill_metrics(text_replace, pages=[page_id])
+    elif os.path.isfile('config_test.yml'):
+        cfg.set_file('config_test.yml')
+    else:
+        raise Exception("You don't have any valid config files")
 
 
 if __name__ == "__main__":
